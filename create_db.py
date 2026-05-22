@@ -1,0 +1,125 @@
+import sqlite3
+import os
+
+# =============================================================================
+# DATABASE CONNECTION
+# -----------------------------------------------------------------------------
+# Looks for (or creates) the database file in the same folder as this script.
+# 'os.path' builds the file path in a way that works regardless of where
+# you run the script from. The file 'ebaccounting.db' is your entire database
+# — one file, fully portable, no server needed.
+# =============================================================================
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "ebaccounting.db")
+
+def get_connection():
+    """Returns a connection to the database."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA foreign_keys = ON")  # Enforce relationships between tables
+    return conn
+
+
+# =============================================================================
+# TABLE: customers
+# -----------------------------------------------------------------------------
+# Stores reusable customer records. A customer is created once and can be
+# linked to many estimates over time. 'INTEGER PRIMARY KEY' auto-increments,
+# meaning SQLite assigns a unique ID for each new customer automatically.
+# =============================================================================
+
+CREATE_CUSTOMERS = """
+CREATE TABLE IF NOT EXISTS customers (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT    NOT NULL,
+    email       TEXT,
+    phone       TEXT,
+    address     TEXT,
+    created_at  TEXT    DEFAULT (datetime('now'))
+);
+"""
+
+
+# =============================================================================
+# TABLE: estimates
+# -----------------------------------------------------------------------------
+# One row per estimate. 'customer_id' is a foreign key — it links this estimate
+# to a specific customer in the customers table. If you try to link to a
+# customer that doesn't exist, SQLite will reject it (because of PRAGMA above).
+#
+# 'status' tracks where the estimate is in its lifecycle.
+# 'estimate_number' is your human-readable internal reference (e.g. EST-001).
+# 'customer_reference' is their identifier — PO number, WO number, address, etc.
+# =============================================================================
+
+CREATE_ESTIMATES = """
+CREATE TABLE IF NOT EXISTS estimates (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id         INTEGER NOT NULL REFERENCES customers(id),
+    estimate_number     TEXT    NOT NULL UNIQUE,
+    customer_reference  TEXT,
+    status              TEXT    NOT NULL DEFAULT 'draft',
+    notes               TEXT,
+    created_at          TEXT    DEFAULT (datetime('now')),
+    updated_at          TEXT    DEFAULT (datetime('now'))
+);
+"""
+
+
+# =============================================================================
+# TABLE: estimate_line_items
+# -----------------------------------------------------------------------------
+# Each line on an estimate is its own row here. This is the correct approach —
+# it keeps the data flexible (any number of lines per estimate) and lets us
+# calculate totals dynamically rather than storing numbers that could go stale.
+#
+# 'taxable' is 0 (no GST) or 1 (apply GST). SQLite has no boolean type;
+# integers 0 and 1 are the standard stand-in.
+#
+# Totals (subtotal, tax, grand total) are NOT stored here — the app calculates
+# them from these rows every time they're needed.
+# =============================================================================
+
+CREATE_ESTIMATE_LINE_ITEMS = """
+CREATE TABLE IF NOT EXISTS estimate_line_items (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    estimate_id INTEGER NOT NULL REFERENCES estimates(id) ON DELETE CASCADE,
+    description TEXT    NOT NULL,
+    quantity    REAL    NOT NULL DEFAULT 1,
+    unit_price  REAL    NOT NULL DEFAULT 0.0,
+    taxable     INTEGER NOT NULL DEFAULT 0
+);
+"""
+
+# 'ON DELETE CASCADE' means: if an estimate is deleted, its line items are
+# automatically deleted too. No orphaned rows left behind.
+
+
+# =============================================================================
+# MAIN — CREATE ALL TABLES
+# -----------------------------------------------------------------------------
+# This block runs when you execute the file directly ('python create_db.py').
+# It connects to the database, runs each CREATE TABLE statement in order,
+# and confirms success. Safe to run more than once — 'IF NOT EXISTS' means
+# it won't overwrite tables that are already there.
+# =============================================================================
+
+if __name__ == "__main__":
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    print(f"Connecting to database at: {DB_PATH}")
+
+    cursor.execute(CREATE_CUSTOMERS)
+    print("✓ Table 'customers' ready")
+
+    cursor.execute(CREATE_ESTIMATES)
+    print("✓ Table 'estimates' ready")
+
+    cursor.execute(CREATE_ESTIMATE_LINE_ITEMS)
+    print("✓ Table 'estimate_line_items' ready")
+
+    conn.commit()
+    conn.close()
+
+    print("\nDatabase setup complete. You're ready to build.")

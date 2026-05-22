@@ -1,0 +1,4 @@
+venv/
+ebaccounting.db
+__pycache__/
+*.pyc
