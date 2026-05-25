@@ -1,6 +1,6 @@
 # EBAccounting — Project Documentation
-> Last updated: 2026-05-21
-> Version: v001
+> Last updated: 2026-05-25
+> Version: v002
 
 ---
 
@@ -51,7 +51,8 @@ from a prior attempt in a separate folder.
 eba-c/
 ├── venv/                   # Python virtual environment (not committed to git)
 ├── templates/
-│   └── index.html          # All frontend: HTML, CSS, JavaScript
+│   ├── index.html          # Estimates page: list + form
+│   └── invoices.html       # Invoices page: list + form
 ├── app.py                  # Flask server — routes and database queries
 ├── create_db.py            # Run once to create/verify database schema
 ├── ebaccounting.db         # SQLite database file (not committed to git)
@@ -116,18 +117,51 @@ Each line on an estimate. Totals are calculated dynamically, never stored.
 
 ---
 
+## Database Schema — Phase 2
+
+### `invoices`
+One row per invoice. Optionally linked back to a source estimate.
+
+| Column             | Type    | Notes                                          |
+|--------------------|---------|------------------------------------------------|
+| id                 | INTEGER | Primary key, auto-increment                    |
+| customer_id        | INTEGER | Foreign key → customers.id                     |
+| estimate_id        | INTEGER | Nullable FK → estimates.id (null if scratch)   |
+| invoice_number     | TEXT    | Auto-generated (e.g. INV-001), unique          |
+| customer_reference | TEXT    | Their PO / WO / address                        |
+| status             | TEXT    | draft / sent / partial / paid / overdue        |
+| notes              | TEXT    |                                                |
+| issued_date        | TEXT    |                                                |
+| due_date           | TEXT    | Defaults to +30 days from issued in UI         |
+| created_at         | TEXT    | Auto-set                                       |
+| updated_at         | TEXT    | Auto-set (not yet wired to update on save)     |
+
+### `invoice_line_items`
+Independent copy of line items — not linked to estimate_line_items.
+
+| Column      | Type    | Notes                                       |
+|-------------|---------|---------------------------------------------|
+| id          | INTEGER | Primary key, auto-increment                 |
+| invoice_id  | INTEGER | Foreign key → invoices.id (CASCADE delete)  |
+| description | TEXT    | Required                                    |
+| quantity    | REAL    |                                             |
+| unit_price  | REAL    |                                             |
+| taxable     | INTEGER | 0 = no GST, 1 = apply GST (5%)              |
+
+---
+
 ## Phased Roadmap
 
 | Phase | Scope                              | Status      |
 |-------|------------------------------------|-------------|
 | 1     | Customers, Estimates, Line Items   | ✅ Complete  |
-| 2     | Invoices (convert from estimates)  | Planned     |
+| 2     | Invoices (convert from estimates)  | ✅ Complete  |
 | 3     | Payments incl. partial payments    | Planned     |
 | 4     | Expenses / COGS                    | Planned     |
 | 5     | Dashboard (gross profit, due, etc) | Planned     |
 
 ### Phase 2 Design Note
-Invoices will have their own table (`invoices`, `invoice_line_items`) with an
+Invoices have their own tables (`invoices`, `invoice_line_items`) with an
 optional `estimate_id` foreign key linking back to the source estimate.
 Converting an estimate to an invoice **copies** the data — it does not rename
 or delete the estimate. This preserves the original record and allows the
@@ -137,6 +171,16 @@ invoice to diverge if scope changed.
 Payments will support partial payments — a separate `payments` table linked
 to `invoices` by `invoice_id`, with amount and date per payment. Balance
 owing is calculated dynamically from invoice total minus sum of payments.
+
+---
+
+## Cleanup Backlog
+Items deferred from active sprints. To be addressed in a dedicated cleanup
+session after the dashboard sprint.
+
+- **Filter accepted estimates from the estimates list.** Once an estimate is
+  converted to an invoice, it crowds the active list. Need a way to hide
+  accepted estimates by default with an option to recall them if needed.
 
 ---
 
@@ -154,6 +198,11 @@ Confirmed with owner — no need for multi-customer or split-billing support.
 Even though invoices often originate from estimates, they are stored
 independently. The link is preserved via `estimate_id` on the invoice.
 
+**API routes are namespaced under `/api/`.**
+Page routes (returning HTML) and data routes (returning JSON) are kept
+separate. Convention: `/api/x` for JSON, `/x` for pages. Established in
+Phase 2 to keep the codebase readable as it grows.
+
 **SQLite over LibreOffice or other options.**
 SQLite is a single portable file, requires no server, and is supported natively
 by Python. Perfectly scaled for a single-user local app.
@@ -166,11 +215,25 @@ significant complexity with no benefit at this stage.
 
 ## Changelog
 
+### v002 — 2026-05-25
+- Phase 2 complete
+- SQLite tables added: `invoices`, `invoice_line_items`
+- Flask routes added: `POST /api/invoices`, `GET /api/invoices/<id>`,
+  `POST /api/invoices/from-estimate/<id>`, `GET /invoices` (page)
+- All routes namespaced under `/api/` (page routes stay at `/`)
+- `invoices.html` — full invoices page, same industrial dark aesthetic
+- Nav links added to both pages (Estimates / Invoices)
+- "Convert to Invoice" button on estimate form — copies data, redirects
+  to invoices page, preserves source estimate untouched
+- Source estimate banner on invoice form (↳ converted from EST-xxx)
+- Invoice numbers auto-generated server-side (INV-001, INV-002...)
+- Issued date defaults to today, due date defaults to +30 days
+
 ### v001 — 2026-05-21
 - Initial release
 - SQLite database with `customers`, `estimates`, `estimate_line_items` tables
-- Flask backend with routes: GET `/`, GET+POST `/customers`,
-  POST `/estimates`, GET `/estimates/<id>`
+- Flask backend with routes: GET `/`, GET+POST `/api/customers`,
+  POST `/api/estimates`, GET `/api/estimates/<id>`
 - Full estimate UI: customer select + inline new customer form,
   estimate header fields, dynamic line items, live GST totals,
   notes, status selector
@@ -197,12 +260,12 @@ Replacing Wave accounting. Single user, runs on Ubuntu at localhost:5000.
 - When something works, confirm it before moving on.
 - Be direct. Don't pad. Humour is welcome.
 
-**Current state:** v001 complete. Phase 1 done and tested. All three database
-tables exist and are working. Flask app runs. UI is functional — customers and
-estimates can be created, saved, and reloaded.
+**Current state:** v002 complete. Phase 2 done and tested. All five database
+tables exist and are working. Flask app runs. Both pages functional — estimates
+and invoices can be created, saved, reloaded, and converted.
 
-**Next up:** Phase 2 — invoices. Before starting, review the Phase 2 design
-note above and confirm the schema approach with the owner.
+**Next up:** Auto-generate estimate numbers server-side (same pattern as
+invoices), then Phase 3 — payments.
 
 **What NOT to do:**
 - Don't refactor working code without being asked.

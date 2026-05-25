@@ -61,7 +61,7 @@ def index():
 #                        the new customer's id and name as JSON
 # =============================================================================
 
-@app.route("/customers", methods=["GET", "POST"])
+@app.route("/api/customers", methods=["GET", "POST"])
 def customers():
     conn = get_db()
 
@@ -98,24 +98,28 @@ def customers():
 # a clear error rather than a silent failure or crash.
 # =============================================================================
 
-@app.route("/estimates", methods=["POST"])
+@app.route("/api/estimates", methods=["POST"])
 def create_estimate():
     data = request.get_json()
     conn = get_db()
 
     try:
-        # Insert the estimate header
+    # Auto-generate the next estimate number
+        count = conn.execute("SELECT COUNT(*) FROM estimates").fetchone()[0]
+        estimate_number = f"EST-{str(count + 1).zfill(3)}"
+
+    # Insert the estimate header
         cursor = conn.execute("""
-            INSERT INTO estimates
-                (customer_id, estimate_number, customer_reference, status, notes)
-            VALUES (?, ?, ?, ?, ?)
-        """, (
-            data.get("customer_id"),
-            data.get("estimate_number"),
-            data.get("customer_reference"),
-            data.get("status", "draft"),
-            data.get("notes")
-        ))
+        INSERT INTO estimates
+            (customer_id, estimate_number, customer_reference, status, notes)
+         VALUES (?, ?, ?, ?, ?)
+    """, (
+        data.get("customer_id"),
+        estimate_number,
+        data.get("customer_reference"),
+        data.get("status", "draft"),
+        data.get("notes")
+    ))
         estimate_id = cursor.lastrowid
 
         # Insert each line item linked to the new estimate
@@ -150,7 +154,7 @@ def create_estimate():
 # click an estimate in the list to view or edit it. Returns JSON.
 # =============================================================================
 
-@app.route("/estimates/<int:estimate_id>", methods=["GET"])
+@app.route("/api/estimates/<int:estimate_id>", methods=["GET"])
 def get_estimate(estimate_id):
     conn = get_db()
 
@@ -175,6 +179,203 @@ def get_estimate(estimate_id):
         **dict(estimate),
         "line_items": [dict(i) for i in line_items]
     })
+
+# =============================================================================
+# ROUTE: Invoices — POST new
+# -----------------------------------------------------------------------------
+# Same pattern as create_estimate. Accepts the full invoice payload as JSON:
+# header fields + line items array.
+#
+# 'estimate_id' is optional — only present if this invoice was converted from
+# an existing estimate. If creating from scratch it will be None/null.
+#
+# Invoice number is auto-generated here using the same approach as estimates:
+# count existing invoices and zero-pad the next number (INV-001, INV-002...).
+# =============================================================================
+
+@app.route("/api/invoices", methods=["POST"])
+def create_invoice():
+    data = request.get_json()
+    conn = get_db()
+
+    try:
+        # Auto-generate the next invoice number
+        count = conn.execute("SELECT COUNT(*) FROM invoices").fetchone()[0]
+        invoice_number = f"INV-{str(count + 1).zfill(3)}"
+
+        cursor = conn.execute("""
+            INSERT INTO invoices
+                (customer_id, estimate_id, invoice_number, customer_reference,
+                 status, notes, issued_date, due_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            data.get("customer_id"),
+            data.get("estimate_id"),       # None if created from scratch
+            invoice_number,
+            data.get("customer_reference"),
+            data.get("status", "draft"),
+            data.get("notes"),
+            data.get("issued_date"),
+            data.get("due_date")
+        ))
+        invoice_id = cursor.lastrowid
+
+        # Insert each line item linked to the new invoice
+        for item in data.get("line_items", []):
+            conn.execute("""
+                INSERT INTO invoice_line_items
+                    (invoice_id, description, quantity, unit_price, taxable)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                invoice_id,
+                item.get("description"),
+                item.get("quantity"),
+                item.get("unit_price"),
+                1 if item.get("taxable") else 0
+            ))
+
+        conn.commit()
+        return jsonify({"id": invoice_id, "invoice_number": invoice_number}), 201
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        conn.close()
+
+
+# =============================================================================
+# ROUTE: Single Invoice — GET
+# -----------------------------------------------------------------------------
+# Fetches one invoice by ID with its line items. Same structure as
+# get_estimate. Also joins customer name and — if it exists — the linked
+# estimate number, useful for displaying "converted from EST-003" in the UI.
+# =============================================================================
+
+@app.route("/api/invoices/<int:invoice_id>", methods=["GET"])
+def get_invoice(invoice_id):
+    conn = get_db()
+
+    invoice = conn.execute("""
+        SELECT i.*, c.name AS customer_name, e.estimate_number
+        FROM invoices i
+        JOIN customers c ON i.customer_id = c.id
+        LEFT JOIN estimates e ON i.estimate_id = e.id
+        WHERE i.id = ?
+    """, (invoice_id,)).fetchone()
+
+    if not invoice:
+        conn.close()
+        return jsonify({"error": "Invoice not found"}), 404
+
+    line_items = conn.execute("""
+        SELECT * FROM invoice_line_items WHERE invoice_id = ?
+    """, (invoice_id,)).fetchall()
+
+    conn.close()
+
+    return jsonify({
+        **dict(invoice),
+        "line_items": [dict(i) for i in line_items]
+    })
+
+
+# =============================================================================
+# ROUTE: Convert Estimate to Invoice — POST
+# -----------------------------------------------------------------------------
+# Copies an estimate's header fields and line items into new invoice records.
+# The estimate is NOT modified — it stays exactly as-is. The invoice gets
+# its own independent copy of the line items so it can diverge if scope
+# changes after the estimate was accepted.
+#
+# The frontend will call this with just the estimate_id plus any overrides
+# (issued_date, due_date, notes). Everything else is copied from the estimate.
+# =============================================================================
+
+@app.route("/api/invoices/from-estimate/<int:estimate_id>", methods=["POST"])
+def invoice_from_estimate(estimate_id):
+    data = request.get_json()
+    conn = get_db()
+
+    try:
+        # Fetch the source estimate
+        estimate = conn.execute("""
+            SELECT * FROM estimates WHERE id = ?
+        """, (estimate_id,)).fetchone()
+
+        if not estimate:
+            return jsonify({"error": "Estimate not found"}), 404
+
+        # Auto-generate the next invoice number
+        count = conn.execute("SELECT COUNT(*) FROM invoices").fetchone()[0]
+        invoice_number = f"INV-{str(count + 1).zfill(3)}"
+
+        # Create the invoice, copying fields from the estimate
+        cursor = conn.execute("""
+            INSERT INTO invoices
+                (customer_id, estimate_id, invoice_number, customer_reference,
+                 status, notes, issued_date, due_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            estimate["customer_id"],
+            estimate_id,
+            invoice_number,
+            estimate["customer_reference"],
+            "draft",
+            data.get("notes", estimate["notes"]),
+            data.get("issued_date"),
+            data.get("due_date")
+        ))
+        invoice_id = cursor.lastrowid
+
+        # Copy line items from the estimate — these are now independent rows
+        source_items = conn.execute("""
+            SELECT * FROM estimate_line_items WHERE estimate_id = ?
+        """, (estimate_id,)).fetchall()
+
+        for item in source_items:
+            conn.execute("""
+                INSERT INTO invoice_line_items
+                    (invoice_id, description, quantity, unit_price, taxable)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                invoice_id,
+                item["description"],
+                item["quantity"],
+                item["unit_price"],
+                item["taxable"]
+            ))
+
+        conn.commit()
+        return jsonify({"id": invoice_id, "invoice_number": invoice_number}), 201
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        conn.close()
+
+# =============================================================================
+# ROUTE: Invoices page
+# -----------------------------------------------------------------------------
+# Serves the invoices HTML page. Fetches all invoices with customer name
+# joined in, same pattern as the index route for estimates.
+# =============================================================================
+
+@app.route("/invoices")
+def invoices_page():
+    conn = get_db()
+    invoices = conn.execute("""
+        SELECT i.id, i.invoice_number, i.customer_reference, i.status,
+               i.issued_date, i.due_date, c.name AS customer_name
+        FROM invoices i
+        JOIN customers c ON i.customer_id = c.id
+        ORDER BY i.created_at DESC
+    """).fetchall()
+    conn.close()
+    return render_template("invoices.html", invoices=invoices)
 
 
 # =============================================================================

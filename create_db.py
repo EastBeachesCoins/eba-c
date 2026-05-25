@@ -96,6 +96,58 @@ CREATE TABLE IF NOT EXISTS estimate_line_items (
 
 
 # =============================================================================
+# TABLE: invoices
+# -----------------------------------------------------------------------------
+# One row per invoice. Works like estimates, but 'estimate_id' is optional —
+# it's only set if this invoice was converted from an existing estimate.
+# If created from scratch, it stays NULL.
+#
+# 'issued_date' is when the invoice goes out. 'due_date' defaults to 30 days
+# out but is set manually — the default is just a convenience, not enforced.
+#
+# Status lifecycle: draft → sent → partial → paid (or overdue at any point).
+# =============================================================================
+
+CREATE_INVOICES = """
+CREATE TABLE IF NOT EXISTS invoices (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id         INTEGER NOT NULL REFERENCES customers(id),
+    estimate_id         INTEGER REFERENCES estimates(id),
+    invoice_number      TEXT    NOT NULL UNIQUE,
+    customer_reference  TEXT,
+    status              TEXT    NOT NULL DEFAULT 'draft',
+    notes               TEXT,
+    issued_date         TEXT,
+    due_date            TEXT,
+    created_at          TEXT    DEFAULT (datetime('now')),
+    updated_at          TEXT    DEFAULT (datetime('now'))
+);
+"""
+
+
+# =============================================================================
+# TABLE: invoice_line_items
+# -----------------------------------------------------------------------------
+# Identical structure to estimate_line_items — same logic applies.
+# Totals are never stored, always calculated dynamically.
+#
+# When converting an estimate to an invoice, these rows are copied from
+# estimate_line_items. After that they're independent — changes here
+# don't affect the original estimate.
+# =============================================================================
+
+CREATE_INVOICE_LINE_ITEMS = """
+CREATE TABLE IF NOT EXISTS invoice_line_items (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_id  INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    description TEXT    NOT NULL,
+    quantity    REAL    NOT NULL DEFAULT 1,
+    unit_price  REAL    NOT NULL DEFAULT 0.0,
+    taxable     INTEGER NOT NULL DEFAULT 0
+);
+"""
+
+# =============================================================================
 # MAIN — CREATE ALL TABLES
 # -----------------------------------------------------------------------------
 # This block runs when you execute the file directly ('python create_db.py').
@@ -118,6 +170,12 @@ if __name__ == "__main__":
 
     cursor.execute(CREATE_ESTIMATE_LINE_ITEMS)
     print("✓ Table 'estimate_line_items' ready")
+
+    cursor.execute(CREATE_INVOICES)
+    print("✓ Table 'invoices' ready")
+
+    cursor.execute(CREATE_INVOICE_LINE_ITEMS)
+    print("✓ Table 'invoice_line_items' ready")
 
     conn.commit()
     conn.close()

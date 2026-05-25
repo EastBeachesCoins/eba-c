@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>EBAccounting</title>
+  <title>EBAccounting — Invoices</title>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet"/>
-
+ 
   <!-- ===========================================================
     STYLES
     ---------------------------------------------------------------
-    Industrial / utilitarian aesthetic — fits a contractor's tool.
-    Dark background, high-contrast amber accent, monospace numbers.
-    CSS variables at the top make it easy to retheme later.
+    Identical design system to index.html. Same CSS variables,
+    same component classes. Any theme changes should be made in
+    both files until we consolidate into a shared stylesheet.
   ============================================================== -->
   <style>
     :root {
@@ -28,9 +28,9 @@
       --mono:       'IBM Plex Mono', monospace;
       --sans:       'IBM Plex Sans', sans-serif;
     }
-
+ 
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
+ 
     body {
       background: var(--bg);
       color: var(--text);
@@ -38,7 +38,7 @@
       font-size: 14px;
       line-height: 1.6;
     }
-
+ 
     /* ----- Layout ----- */
     header {
       border-bottom: 1px solid var(--border);
@@ -47,27 +47,40 @@
       align-items: center;
       justify-content: space-between;
     }
-
+ 
     header h1 {
       font-family: var(--mono);
       font-size: 18px;
       letter-spacing: 0.08em;
       color: var(--accent);
     }
-
-    header span {
-      font-size: 11px;
-      color: var(--muted);
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
+ 
+    /* ----- Nav links ----- */
+    .nav-links {
+      display: flex;
+      gap: 24px;
+      align-items: center;
     }
-
+ 
+    .nav-links a {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+ 
+    .nav-links a:hover  { color: var(--text); }
+    .nav-links a.active { color: var(--accent); }
+ 
     main {
       max-width: 1100px;
       margin: 0 auto;
       padding: 32px;
     }
-
+ 
     /* ----- Section titles ----- */
     .section-title {
       font-family: var(--mono);
@@ -79,7 +92,7 @@
       padding-bottom: 6px;
       border-bottom: 1px solid var(--border);
     }
-
+ 
     /* ----- Cards / surfaces ----- */
     .card {
       background: var(--surface);
@@ -88,35 +101,35 @@
       padding: 24px;
       margin-bottom: 24px;
     }
-
+ 
     /* ----- Form elements ----- */
     .form-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 16px;
     }
-
+ 
     .form-grid.three-col {
       grid-template-columns: 1fr 1fr 1fr;
     }
-
+ 
     .form-group {
       display: flex;
       flex-direction: column;
       gap: 6px;
     }
-
+ 
     .form-group.full-width {
       grid-column: 1 / -1;
     }
-
+ 
     label {
       font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 0.1em;
       color: var(--muted);
     }
-
+ 
     input, select, textarea {
       background: var(--bg);
       border: 1px solid var(--border);
@@ -128,16 +141,16 @@
       transition: border-color 0.15s;
       width: 100%;
     }
-
+ 
     input:focus, select:focus, textarea:focus {
       outline: none;
       border-color: var(--accent);
     }
-
+ 
     textarea { resize: vertical; min-height: 72px; }
-
+ 
     select option { background: var(--surface); }
-
+ 
     /* ----- Buttons ----- */
     .btn {
       border: none;
@@ -149,21 +162,21 @@
       padding: 9px 18px;
       transition: opacity 0.15s;
     }
-
+ 
     .btn:hover { opacity: 0.85; }
-
+ 
     .btn-primary  { background: var(--accent); color: #000; }
     .btn-ghost    { background: transparent; border: 1px solid var(--border); color: var(--text); }
     .btn-danger   { background: transparent; border: 1px solid var(--danger); color: var(--danger); font-size: 11px; padding: 4px 10px; }
     .btn-success  { background: var(--success); color: #fff; }
-
+ 
     .btn-row {
       display: flex;
       gap: 10px;
       margin-top: 20px;
       justify-content: flex-end;
     }
-
+ 
     /* ----- Line items table ----- */
     .line-items-header {
       display: grid;
@@ -173,14 +186,14 @@
       border-bottom: 1px solid var(--border);
       margin-bottom: 8px;
     }
-
+ 
     .line-items-header span {
       font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 0.1em;
       color: var(--muted);
     }
-
+ 
     .line-item-row {
       display: grid;
       grid-template-columns: 3fr 80px 110px 60px 36px;
@@ -188,46 +201,26 @@
       align-items: center;
       margin-bottom: 6px;
     }
-
+ 
     .line-item-row input[type="number"] {
       font-family: var(--mono);
       text-align: right;
     }
-
+ 
     /* GST toggle checkbox */
     .tax-toggle {
       display: flex;
       align-items: center;
       justify-content: center;
     }
-
+ 
     .tax-toggle input[type="checkbox"] {
       width: 16px;
       height: 16px;
       accent-color: var(--accent);
       cursor: pointer;
     }
-
-    /* ----- Nav links ----- */
-    .nav-links {
-        display: flex;
-        gap: 24px;
-        align-items: center;
-    }
-
-    .nav-links a {
-        font-family: var(--mono);
-        font-size: 11px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--muted);
-        text-decoration: none;
-        transition: color 0.15s;
-    }
-
-    .nav-links a:hover  { color: var(--text); }
-    .nav-links a.active { color: var(--accent); }
-
+ 
     /* ----- Totals block ----- */
     .totals-block {
       margin-top: 16px;
@@ -238,20 +231,20 @@
       align-items: flex-end;
       gap: 6px;
     }
-
+ 
     .totals-block .total-row {
       display: flex;
       gap: 24px;
       font-family: var(--mono);
       font-size: 13px;
     }
-
+ 
     .totals-block .total-row span:first-child {
       color: var(--muted);
       min-width: 100px;
       text-align: right;
     }
-
+ 
     .totals-block .total-row.grand {
       font-size: 16px;
       font-weight: 600;
@@ -260,13 +253,13 @@
       padding-top: 8px;
       margin-top: 2px;
     }
-
-    /* ----- Estimates list table ----- */
+ 
+    /* ----- Invoices list table ----- */
     table {
       width: 100%;
       border-collapse: collapse;
     }
-
+ 
     th {
       font-size: 11px;
       text-transform: uppercase;
@@ -276,15 +269,15 @@
       padding: 8px 12px;
       border-bottom: 1px solid var(--border);
     }
-
+ 
     td {
       padding: 10px 12px;
       border-bottom: 1px solid var(--border);
       font-size: 13px;
     }
-
+ 
     tr:hover td { background: #222; cursor: pointer; }
-
+ 
     .status-badge {
       font-family: var(--mono);
       font-size: 10px;
@@ -293,12 +286,14 @@
       padding: 2px 8px;
       border-radius: 2px;
     }
-
+ 
+    /* Invoice statuses — same pattern as estimates, new colours for new states */
     .status-draft    { background: #2e2e2e; color: var(--muted); }
     .status-sent     { background: #1a3a5c; color: #5ba3f5; }
-    .status-accepted { background: #1a3a2a; color: #4caf80; }
-    .status-declined { background: #3a1a1a; color: #e07070; }
-
+    .status-partial  { background: #2e2200; color: #f0a500; }
+    .status-paid     { background: #1a3a2a; color: #4caf80; }
+    .status-overdue  { background: #3a1a1a; color: #e07070; }
+ 
     /* ----- New customer inline form ----- */
     #new-customer-form {
       display: none;
@@ -308,7 +303,22 @@
       padding: 16px;
       margin-top: 10px;
     }
-
+ 
+    /* ----- Source estimate banner ----- */
+    /* Shown when an invoice was converted from an estimate */
+    #estimate-source-banner {
+      display: none;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--accent);
+      background: #1a1400;
+      border: 1px solid var(--accent-dim);
+      border-radius: var(--radius);
+      padding: 8px 14px;
+      margin-bottom: 16px;
+      letter-spacing: 0.05em;
+    }
+ 
     /* ----- Toast notification ----- */
     #toast {
       position: fixed;
@@ -324,91 +334,97 @@
       transition: opacity 0.3s;
       pointer-events: none;
     }
-
+ 
     #toast.error { background: var(--danger); }
     #toast.show  { opacity: 1; }
-
+ 
     /* ----- Utility ----- */
     .hidden { display: none !important; }
     .mono   { font-family: var(--mono); }
   </style>
 </head>
-
+ 
 <body>
-
+ 
   <!-- ===========================================================
     HEADER
     ---------------------------------------------------------------
-    App title and a persistent label. Stays fixed at the top.
+    Same as index.html. Nav links added here — active state set
+    on the current page. Will be consolidated when dashboard is built.
   ============================================================== -->
-    <header>
-     <h1>EB_ACCOUNTING</h1>
-     <nav class="nav-links">
-     <a href="/" class="active">Estimates</a>
-      <a href="/invoices">Invoices</a>
-     </nav>
-    </header>
-
+  <header>
+    <h1>EB_ACCOUNTING</h1>
+    <nav class="nav-links">
+      <a href="/">Estimates</a>
+      <a href="/invoices" class="active">Invoices</a>
+    </nav>
+  </header>
+ 
   <main>
-
+ 
     <!-- ===========================================================
-      ESTIMATES LIST
+      INVOICES LIST
       ---------------------------------------------------------------
       Pulled from the database on page load via Flask (Jinja2 loop).
-      Clicking a row will eventually open a view/edit mode — wired
-      up in the JS section below. Empty state shown when no records.
+      Clicking a row loads the invoice into the form below.
     ============================================================== -->
-    <div class="section-title">Estimates</div>
+    <div class="section-title">Invoices</div>
     <div class="card" style="padding: 0; overflow: hidden;">
-      <table id="estimates-table">
+      <table id="invoices-table">
         <thead>
           <tr>
-            <th>Estimate #</th>
+            <th>Invoice #</th>
             <th>Customer</th>
             <th>Reference</th>
-            <th>Date</th>
+            <th>Issued</th>
+            <th>Due</th>
             <th>Status</th>
           </tr>
         </thead>
-        <tbody id="estimates-body">
-          {% if estimates %}
-            {% for est in estimates %}
-            <tr onclick="loadEstimate({{ est.id }})">
-              <td class="mono">{{ est.estimate_number }}</td>
-              <td>{{ est.customer_name }}</td>
-              <td>{{ est.customer_reference or '—' }}</td>
-              <td class="mono">{{ est.created_at[:10] }}</td>
-              <td><span class="status-badge status-{{ est.status }}">{{ est.status }}</span></td>
+        <tbody id="invoices-body">
+          {% if invoices %}
+            {% for inv in invoices %}
+            <tr onclick="loadInvoice({{ inv.id }})">
+              <td class="mono">{{ inv.invoice_number }}</td>
+              <td>{{ inv.customer_name }}</td>
+              <td>{{ inv.customer_reference or '—' }}</td>
+              <td class="mono">{{ inv.issued_date or '—' }}</td>
+              <td class="mono">{{ inv.due_date or '—' }}</td>
+              <td><span class="status-badge status-{{ inv.status }}">{{ inv.status }}</span></td>
             </tr>
             {% endfor %}
           {% else %}
             <tr id="empty-row">
-              <td colspan="5" style="text-align:center; color: var(--muted); padding: 32px;">
-                No estimates yet. Create one below.
+              <td colspan="6" style="text-align:center; color: var(--muted); padding: 32px;">
+                No invoices yet. Create one below.
               </td>
             </tr>
           {% endif %}
         </tbody>
       </table>
     </div>
-
-
+ 
+ 
     <!-- ===========================================================
-      ESTIMATE FORM
+      INVOICE FORM
       ---------------------------------------------------------------
-      Used for both creating new estimates and viewing existing ones.
-      Broken into three logical sub-sections:
+      Used for both creating new invoices and viewing existing ones.
+      Same four-section structure as the estimate form:
         1. Customer selection / creation
-        2. Estimate header fields
+        2. Invoice header fields
         3. Line items + totals
         4. Notes + actions
     ============================================================== -->
-    <div class="section-title" style="margin-top: 32px;">New Estimate</div>
+    <div class="section-title" style="margin-top: 32px;">New Invoice</div>
     <div class="card">
-
-      <!-- Hidden field stores estimate ID when viewing/editing -->
-      <input type="hidden" id="estimate-id" value="" />
-
+ 
+      <!-- Hidden fields store IDs when viewing/editing -->
+      <input type="hidden" id="invoice-id" value="" />
+      <input type="hidden" id="source-estimate-id" value="" />
+ 
+      <!-- Banner shown when this invoice was converted from an estimate -->
+      <div id="estimate-source-banner"></div>
+ 
       <!-- --- 1. Customer --- -->
       <div class="section-title">Customer</div>
       <div class="form-grid" style="margin-bottom: 8px;">
@@ -423,7 +439,7 @@
           <button class="btn btn-ghost" onclick="toggleNewCustomer()">+ New Customer</button>
         </div>
       </div>
-
+ 
       <!-- Inline new customer form — hidden by default -->
       <div id="new-customer-form">
         <div class="form-grid three-col" style="margin-bottom: 12px;">
@@ -449,25 +465,34 @@
           <button class="btn btn-ghost" onclick="toggleNewCustomer()">Cancel</button>
         </div>
       </div>
-
-      <!-- --- 2. Estimate Header --- -->
-      <div class="section-title" style="margin-top: 24px;">Estimate Details</div>
-      <div class="form-grid">
+ 
+      <!-- --- 2. Invoice Header --- -->
+      <div class="section-title" style="margin-top: 24px;">Invoice Details</div>
+      <div class="form-grid three-col">
         <div class="form-group">
           <label for="customer-reference">Customer Reference (PO / WO / Address)</label>
           <input type="text" id="customer-reference" placeholder="PO-2026-042" />
         </div>
         <div class="form-group">
-          <label for="estimate-status">Status</label>
-          <select id="estimate-status">
+          <label for="invoice-issued">Issued Date</label>
+          <input type="date" id="invoice-issued" class="mono" />
+        </div>
+        <div class="form-group">
+          <label for="invoice-due">Due Date</label>
+          <input type="date" id="invoice-due" class="mono" />
+        </div>
+        <div class="form-group">
+          <label for="invoice-status">Status</label>
+          <select id="invoice-status">
             <option value="draft">Draft</option>
             <option value="sent">Sent</option>
-            <option value="accepted">Accepted</option>
-            <option value="declined">Declined</option>
+            <option value="partial">Partial</option>
+            <option value="paid">Paid</option>
+            <option value="overdue">Overdue</option>
           </select>
         </div>
       </div>
-
+ 
       <!-- --- 3. Line Items --- -->
       <div class="section-title" style="margin-top: 24px;">Line Items</div>
       <div class="line-items-header">
@@ -481,8 +506,8 @@
         <!-- Line item rows injected here by JS -->
       </div>
       <button class="btn btn-ghost" style="margin-top: 8px;" onclick="addLineItem()">+ Add Line</button>
-
-      <!-- Totals — recalculated live by JS whenever inputs change -->
+ 
+      <!-- Totals — recalculated live whenever inputs change -->
       <div class="totals-block">
         <div class="total-row">
           <span>Subtotal</span>
@@ -497,64 +522,78 @@
           <span id="total-grand">$0.00</span>
         </div>
       </div>
-
+ 
       <!-- --- 4. Notes + Actions --- -->
       <div class="section-title" style="margin-top: 24px;">Notes</div>
       <div class="form-group">
-        <textarea id="estimate-notes" placeholder="Payment terms, scope clarifications, exclusions..."></textarea>
+        <textarea id="invoice-notes" placeholder="Payment terms, e-transfer details, scope notes..."></textarea>
       </div>
-
-     <div class="btn-row">
+ 
+      <div class="btn-row">
         <button class="btn btn-ghost" onclick="resetForm()">Clear</button>
-        <button class="btn btn-ghost hidden" id="convert-btn" onclick="convertToInvoice()">→ Convert to Invoice</button>
-        <button class="btn btn-primary" onclick="saveEstimate()">Save Estimate</button>
-    </div>
-
+        <button class="btn btn-primary" onclick="saveInvoice()">Save Invoice</button>
+      </div>
+ 
     </div>
     <!-- end .card -->
-
+ 
   </main>
-
+ 
   <!-- Toast notification -->
   <div id="toast"></div>
-
-
+ 
+ 
   <!-- ===========================================================
     JAVASCRIPT
     ---------------------------------------------------------------
-    All client-side logic lives here. Broken into sections:
-      1. Page init — load customers on startup, seed first line item
-      2. Customer helpers — populate dropdown, save new customer
-      3. Line item management — add, remove, recalculate totals
-      4. Save estimate — gather form data, POST to Flask
-      5. Load estimate — GET from Flask, populate form for viewing
-      6. Utilities — toast, form reset, formatting
+    Same structure as index.html. Sections:
+      1. Page init
+      2. Customer helpers
+      3. Line item management
+      4. Save invoice
+      5. Load invoice
+      6. Utilities
   ============================================================== -->
   <script>
-
+ 
     const GST_RATE = 0.05;
-
+ 
     // -------------------------------------------------------
     // 1. PAGE INIT
-    // Runs once when the page loads. Fetches customers from
-    // the API to populate the dropdown, then seeds one empty
-    // line item so the form is ready to use immediately.
+    // Load customers into dropdown, seed one empty line item,
+    // and default the issued date to today + due date to +30d.
     // -------------------------------------------------------
     document.addEventListener("DOMContentLoaded", () => {
       loadCustomers();
       addLineItem();
+      setDefaultDates();
     });
-
-
+ 
+    function setDefaultDates() {
+      const today = new Date();
+      const due   = new Date();
+      due.setDate(due.getDate() + 30);
+ 
+      // Format as YYYY-MM-DD for the date input
+      document.getElementById("invoice-issued").value = formatDate(today);
+      document.getElementById("invoice-due").value    = formatDate(due);
+    }
+ 
+    function formatDate(d) {
+      return d.toISOString().split("T")[0];
+    }
+ 
+ 
     // -------------------------------------------------------
     // 2. CUSTOMER HELPERS
+    // Identical to index.html — populates dropdown, saves
+    // new customer inline, selects them after save.
     // -------------------------------------------------------
-
+ 
     async function loadCustomers() {
       const res = await fetch("/api/customers");
       const customers = await res.json();
       const select = document.getElementById("customer-select");
-      // Clear existing options except the placeholder
       select.innerHTML = '<option value="">— choose —</option>';
       customers.forEach(c => {
         const opt = document.createElement("option");
@@ -563,35 +602,34 @@
         select.appendChild(opt);
       });
     }
-
+ 
     function toggleNewCustomer() {
       const form = document.getElementById("new-customer-form");
       form.style.display = form.style.display === "block" ? "none" : "block";
     }
-
+ 
     async function saveNewCustomer() {
       const name = document.getElementById("nc-name").value.trim();
       if (!name) { showToast("Customer name is required.", true); return; }
-
+ 
       const payload = {
         name,
         email:   document.getElementById("nc-email").value.trim(),
         phone:   document.getElementById("nc-phone").value.trim(),
         address: document.getElementById("nc-address").value.trim(),
       };
-
+ 
       const res = await fetch("/api/customers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-
+ 
       if (res.ok) {
         const customer = await res.json();
         await loadCustomers();
         document.getElementById("customer-select").value = customer.id;
         toggleNewCustomer();
-        // Clear new customer fields
         ["nc-name","nc-email","nc-phone","nc-address"].forEach(id =>
           document.getElementById(id).value = ""
         );
@@ -600,29 +638,26 @@
         showToast("Failed to save customer.", true);
       }
     }
-
-
+ 
+ 
     // -------------------------------------------------------
     // 3. LINE ITEM MANAGEMENT
-    // Each line item is a div row with four inputs + a remove
-    // button. Any change to quantity or price triggers
-    // recalculation of all totals.
+    // Identical logic to index.html.
     // -------------------------------------------------------
-
+ 
     function addLineItem() {
       const container = document.getElementById("line-items-container");
       const row = document.createElement("div");
       row.className = "line-item-row";
       row.innerHTML = `
         <input type="text"   class="li-desc"  placeholder="Labour, materials, etc." />
-        <input type="number" class="li-qty"   placeholder="1"   min="0" step="any" value="1" />
+        <input type="number" class="li-qty"   placeholder="1"    min="0" step="any" value="1" />
         <input type="number" class="li-price" placeholder="0.00" min="0" step="0.01" value="0" />
         <div class="tax-toggle">
           <input type="checkbox" class="li-tax" title="Apply GST" />
         </div>
         <button class="btn btn-danger" onclick="removeLineItem(this)">✕</button>
       `;
-      // Recalculate totals whenever qty, price, or tax changes
       row.querySelectorAll(".li-qty, .li-price, .li-tax").forEach(el => {
         el.addEventListener("input", recalcTotals);
         el.addEventListener("change", recalcTotals);
@@ -630,16 +665,16 @@
       container.appendChild(row);
       recalcTotals();
     }
-
+ 
     function removeLineItem(btn) {
       btn.closest(".line-item-row").remove();
       recalcTotals();
     }
-
+ 
     function recalcTotals() {
       let subtotal = 0;
       let taxTotal = 0;
-
+ 
       document.querySelectorAll(".line-item-row").forEach(row => {
         const qty   = parseFloat(row.querySelector(".li-qty").value)   || 0;
         const price = parseFloat(row.querySelector(".li-price").value) || 0;
@@ -648,29 +683,28 @@
         subtotal += lineTotal;
         if (taxed) taxTotal += lineTotal * GST_RATE;
       });
-
+ 
       document.getElementById("total-subtotal").textContent = fmt(subtotal);
       document.getElementById("total-tax").textContent      = fmt(taxTotal);
       document.getElementById("total-grand").textContent    = fmt(subtotal + taxTotal);
     }
-
-
+ 
+ 
     // -------------------------------------------------------
-    // 4. SAVE ESTIMATE
-    // Gathers all form values, validates the minimum required
-    // fields, then POSTs to Flask as JSON. On success, reloads
-    // the page so the new estimate appears in the list.
+    // 4. SAVE INVOICE
+    // POSTs to /api/invoices. Invoice number is auto-generated
+    // server-side — we don't send one. On success, reloads the
+    // page so the new invoice appears in the list.
     // -------------------------------------------------------
-
-    async function saveEstimate() {
+ 
+    async function saveInvoice() {
       const customerId = document.getElementById("customer-select").value;
-      
-      if (!customerId)     { showToast("Please select a customer.", true); return; }
-
+      if (!customerId) { showToast("Please select a customer.", true); return; }
+ 
       const lineItems = [];
       document.querySelectorAll(".line-item-row").forEach(row => {
         const desc = row.querySelector(".li-desc").value.trim();
-        if (!desc) return; // skip blank lines
+        if (!desc) return;
         lineItems.push({
           description: desc,
           quantity:    parseFloat(row.querySelector(".li-qty").value)   || 0,
@@ -678,55 +712,72 @@
           taxable:     row.querySelector(".li-tax").checked
         });
       });
-
+ 
       if (lineItems.length === 0) { showToast("Add at least one line item.", true); return; }
-
+ 
+      // Include source estimate_id if this was converted — otherwise omit
+      const estimateId = document.getElementById("source-estimate-id").value;
+ 
       const payload = {
         customer_id:        parseInt(customerId),
+        estimate_id:        estimateId ? parseInt(estimateId) : null,
         customer_reference: document.getElementById("customer-reference").value.trim(),
-        status:             document.getElementById("estimate-status").value,
-        notes:              document.getElementById("estimate-notes").value.trim(),
+        status:             document.getElementById("invoice-status").value,
+        notes:              document.getElementById("invoice-notes").value.trim(),
+        issued_date:        document.getElementById("invoice-issued").value || null,
+        due_date:           document.getElementById("invoice-due").value   || null,
         line_items:         lineItems
       };
-
-      const res = await fetch("/api/estimates", {
+ 
+      const res = await fetch("/api/invoices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-
+ 
       if (res.ok) {
-        showToast("Estimate saved!");
+        showToast("Invoice saved!");
         setTimeout(() => location.reload(), 800);
       } else {
         const err = await res.json();
         showToast(err.error || "Save failed.", true);
       }
     }
-
-
+ 
+ 
     // -------------------------------------------------------
-    // 5. LOAD ESTIMATE
-    // Called when a row in the estimates table is clicked.
-    // Fetches the full estimate from Flask and populates the
-    // form fields so you can review or update it.
+    // 5. LOAD INVOICE
+    // Called when a row in the invoices table is clicked.
+    // Fetches the full invoice from Flask and populates the form.
+    // If estimate_number is present, shows the source banner.
     // -------------------------------------------------------
-
-    async function loadEstimate(id) {
-      const res = await fetch(`/api/estimates/${id}`);
-      if (!res.ok) { showToast("Could not load estimate.", true); return; }
-      const est = await res.json();
-
-      document.getElementById("estimate-id").value            = est.id;
-      document.getElementById("estimate-number").value        = est.estimate_number;
-      document.getElementById("customer-reference").value     = est.customer_reference || "";
-      document.getElementById("estimate-status").value        = est.status;
-      document.getElementById("estimate-notes").value         = est.notes || "";
-      document.getElementById("customer-select").value        = est.customer_id;
-
+ 
+    async function loadInvoice(id) {
+      const res = await fetch(`/api/invoices/${id}`);
+      if (!res.ok) { showToast("Could not load invoice.", true); return; }
+      const inv = await res.json();
+ 
+      document.getElementById("invoice-id").value            = inv.id;
+      document.getElementById("source-estimate-id").value    = inv.estimate_id || "";
+      document.getElementById("customer-reference").value    = inv.customer_reference || "";
+      document.getElementById("invoice-status").value        = inv.status;
+      document.getElementById("invoice-notes").value         = inv.notes || "";
+      document.getElementById("invoice-issued").value        = inv.issued_date || "";
+      document.getElementById("invoice-due").value           = inv.due_date || "";
+      document.getElementById("customer-select").value       = inv.customer_id;
+ 
+      // Show source estimate banner if this invoice came from one
+      const banner = document.getElementById("estimate-source-banner");
+      if (inv.estimate_number) {
+        banner.textContent = `↳ converted from ${inv.estimate_number}`;
+        banner.style.display = "block";
+      } else {
+        banner.style.display = "none";
+      }
+ 
       // Clear and repopulate line items
       document.getElementById("line-items-container").innerHTML = "";
-      est.line_items.forEach(item => {
+      inv.line_items.forEach(item => {
         addLineItem();
         const rows = document.querySelectorAll(".line-item-row");
         const row  = rows[rows.length - 1];
@@ -735,68 +786,40 @@
         row.querySelector(".li-price").value = item.unit_price;
         row.querySelector(".li-tax").checked = item.taxable === 1;
       });
-
-      document.getElementById("convert-btn").classList.remove("hidden");
+ 
       recalcTotals();
-
-      // Scroll form into view
       document.querySelector(".card").scrollIntoView({ behavior: "smooth" });
     }
-
-
+ 
+ 
     // -------------------------------------------------------
     // 6. UTILITIES
     // -------------------------------------------------------
-
+ 
     function resetForm() {
-      ["estimate-id","customer-reference","estimate-notes"]
+      ["invoice-id", "source-estimate-id", "customer-reference", "invoice-notes"]
         .forEach(id => document.getElementById(id).value = "");
-      document.getElementById("customer-select").value   = "";
-      document.getElementById("estimate-status").value   = "draft";
-      document.getElementById("convert-btn").classList.add("hidden");
+      document.getElementById("customer-select").value  = "";
+      document.getElementById("invoice-status").value   = "draft";
       document.getElementById("line-items-container").innerHTML = "";
+      document.getElementById("estimate-source-banner").style.display = "none";
       addLineItem();
       recalcTotals();
+      setDefaultDates();
     }
-
+ 
     function fmt(n) {
       return "$" + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     }
-
+ 
     function showToast(msg, isError = false) {
       const t = document.getElementById("toast");
       t.textContent = msg;
       t.className = isError ? "error show" : "show";
       setTimeout(() => t.className = t.className.replace("show", "").trim(), 2800);
     }
-
-    // -------------------------------------------------------
-// CONVERT ESTIMATE TO INVOICE
-// Only available when an existing estimate is loaded.
-// POSTs to the convert route, then redirects to the
-// invoices page so you can see the result immediately.
-// -------------------------------------------------------
-
-async function convertToInvoice() {
-  const estimateId = document.getElementById("estimate-id").value;
-  if (!estimateId) return;
-
-  const res = await fetch(`/api/invoices/from-estimate/${estimateId}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({})   // No overrides — copies everything from the estimate
-  });
-
-  if (res.ok) {
-    showToast("Invoice created!");
-    setTimeout(() => window.location.href = "/invoices", 800);
-  } else {
-    const err = await res.json();
-    showToast(err.error || "Conversion failed.", true);
-  }
-}
-
+ 
   </script>
-
+ 
 </body>
 </html>
