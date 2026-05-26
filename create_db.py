@@ -148,6 +148,37 @@ CREATE TABLE IF NOT EXISTS invoice_line_items (
 """
 
 # =============================================================================
+# TABLE: payments
+# -----------------------------------------------------------------------------
+# One row per payment received against an invoice. Supports partial payments —
+# a single invoice can have multiple payment rows over time.
+#
+# Balance owing is NOT stored here. It's calculated at query time as:
+#   invoice grand total  −  SUM(payments.amount) for that invoice_id
+#
+# 'method' is free-form but a known list is suggested in the UI.
+# 'notes' is optional — useful for logging things like "post-dated" or
+# "deposit only" without needing a dedicated column for every edge case.
+#
+# ON DELETE CASCADE: if an invoice is deleted, its payment records go too.
+# =============================================================================
+ 
+CREATE_PAYMENTS = """
+CREATE TABLE IF NOT EXISTS payments (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_id      INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    amount          REAL    NOT NULL,
+    payment_date    TEXT    NOT NULL,
+    method          TEXT,
+    notes           TEXT,
+    created_at      TEXT    DEFAULT (datetime('now'))
+);
+"""
+# Accepted values for 'method' (enforced in the UI, not the DB):
+# cheque | e-transfer | cash | credit card | bitcoin
+
+
+# =============================================================================
 # MAIN — CREATE ALL TABLES
 # -----------------------------------------------------------------------------
 # This block runs when you execute the file directly ('python create_db.py').
@@ -176,6 +207,10 @@ if __name__ == "__main__":
 
     cursor.execute(CREATE_INVOICE_LINE_ITEMS)
     print("✓ Table 'invoice_line_items' ready")
+
+    cursor.execute(CREATE_PAYMENTS)
+    print("✓ Table 'payments' ready")
+
 
     conn.commit()
     conn.close()

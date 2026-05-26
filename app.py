@@ -377,6 +377,58 @@ def invoices_page():
     conn.close()
     return render_template("invoices.html", invoices=invoices)
 
+# =============================================================================
+# PAYMENTS
+# -----------------------------------------------------------------------------
+# Payments are stored one row per payment in the 'payments' table, linked to
+# an invoice by invoice_id. Balance owing is never stored — it's calculated
+# as: invoice grand total minus the sum of all payments for that invoice.
+# =============================================================================
+
+@app.route('/api/invoices/<int:invoice_id>/payments', methods=['POST'])
+def add_payment(invoice_id):
+    """Log a new payment against an invoice."""
+    data = request.get_json()
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO payments (invoice_id, amount, payment_date, method, notes)
+        VALUES (?, ?, ?, ?, ?)
+    """, (
+        invoice_id,
+        data['amount'],
+        data['payment_date'],
+        data.get('method'),
+        data.get('notes')
+    ))
+    conn.commit()
+    return jsonify({'success': True})
+
+
+@app.route('/api/invoices/<int:invoice_id>/payments', methods=['GET'])
+def get_payments(invoice_id):
+    """Return all payments for an invoice, plus total paid."""
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT id, amount, payment_date, method, notes
+        FROM payments
+        WHERE invoice_id = ?
+        ORDER BY payment_date ASC
+    """, (invoice_id,)).fetchall()
+
+    payments = [dict(r) for r in rows]
+    total_paid = sum(p['amount'] for p in payments)
+
+    return jsonify({'payments': payments, 'total_paid': total_paid})
+
+
+@app.route('/api/payments/<int:payment_id>', methods=['DELETE'])
+def delete_payment(payment_id):
+    """Delete a single payment by its own ID."""
+    conn = get_db()
+    conn.execute("DELETE FROM payments WHERE id = ?", (payment_id,))
+    conn.commit()
+    return jsonify({'success': True})
+
 
 # =============================================================================
 # RUN

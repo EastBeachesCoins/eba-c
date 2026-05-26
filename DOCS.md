@@ -1,6 +1,6 @@
 # EBAccounting — Project Documentation
-> Last updated: 2026-05-25
-> Version: v002
+> Last updated: 2026-05-26
+> Version: v003
 
 ---
 
@@ -148,15 +148,30 @@ Independent copy of line items — not linked to estimate_line_items.
 | unit_price  | REAL    |                                             |
 | taxable     | INTEGER | 0 = no GST, 1 = apply GST (5%)              |
 
+### Database Schema — Phase 3
+payments
+One row per payment received. A single invoice can have multiple payment rows
+(partial payments). Balance owing is calculated at query time, never stored.
+
+Column        / Type    / Notes
+-------------------------------------------------------------------------
+id            / INTEGER / Primary key, auto-increment
+invoice_id    / INTEGER / Foreign key → invoices.id (CASCADE delete)
+amount        / REAL    / Required
+payment_date  / TEXT    / Required
+method        / TEXT    / e-transfer / cheque / cash / credit card / bitcoin
+notes         / TEXT    / Optional — post-dated, deposit, etc.
+created_at    / TEXT    / Auto-set
+
 ---
 
 ## Phased Roadmap
 
 | Phase | Scope                              | Status      |
 |-------|------------------------------------|-------------|
-| 1     | Customers, Estimates, Line Items   | ✅ Complete  |
-| 2     | Invoices (convert from estimates)  | ✅ Complete  |
-| 3     | Payments incl. partial payments    | Planned     |
+| 1     | Customers, Estimates, Line Items   | ✅ Complete |
+| 2     | Invoices (convert from estimates)  | ✅ Complete |
+| 3     | Payments incl. partial payments    | ✅ Complete |
 | 4     | Expenses / COGS                    | Planned     |
 | 5     | Dashboard (gross profit, due, etc) | Planned     |
 
@@ -168,9 +183,10 @@ or delete the estimate. This preserves the original record and allows the
 invoice to diverge if scope changed.
 
 ### Phase 3 Design Note
-Payments will support partial payments — a separate `payments` table linked
-to `invoices` by `invoice_id`, with amount and date per payment. Balance
-owing is calculated dynamically from invoice total minus sum of payments.
+Payments support partial payments via a separate payments table linked to
+invoices by invoice_id, with one row per payment. Balance owing is
+calculated dynamically from invoice grand total minus SUM(payments.amount).
+Balance is never stored — same principle as line item totals.
 
 ---
 
@@ -214,6 +230,19 @@ significant complexity with no benefit at this stage.
 ---
 
 ## Changelog
+
+### v003 — 2026-05-26
+
+- Phase 3 complete
+- SQLite table added: payments
+- Flask routes added: POST /api/invoices/<id>/payments,
+GET /api/invoices/<id>/payments, DELETE /api/payments/<id>
+invoices.html — payments card added below invoice form
+- Payments section hidden until an existing invoice is loaded
+- Log Payment form: amount, date, method (e-transfer/cheque/cash/credit card/bitcoin), notes
+- Payment history table with per-row delete
+- Balance owing calculated live: grand total minus total paid
+- Payment date defaults to today
 
 ### v002 — 2026-05-25
 - Phase 2 complete
@@ -260,12 +289,13 @@ Replacing Wave accounting. Single user, runs on Ubuntu at localhost:5000.
 - When something works, confirm it before moving on.
 - Be direct. Don't pad. Humour is welcome.
 
-**Current state:** v002 complete. Phase 2 done and tested. All five database
-tables exist and are working. Flask app runs. Both pages functional — estimates
-and invoices can be created, saved, reloaded, and converted.
+**Current state:** v003 complete. Phase 3 done and tested. All six database
+tables exist and are working. Flask app runs. Estimates, invoices, and payments
+are fully functional — invoices can be created, saved, reloaded, converted from
+estimates, and paid in full or in partial payments.
 
-**Next up:** Auto-generate estimate numbers server-side (same pattern as
-invoices), then Phase 3 — payments.
+**Next up:** Phase 4 — Expenses / COGS. Or tackle the cleanup backlog item
+(filter accepted estimates from the estimates list) first — owner's call.
 
 **What NOT to do:**
 - Don't refactor working code without being asked.
