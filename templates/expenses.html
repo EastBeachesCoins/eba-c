@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EBAccounting — Expenses</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #0f0f0f;
+      --surface:   #1a1a1a;
+      --border:    #2e2e2e;
+      --amber:     #ffb300;
+      --amber-dim: #cc8f00;
+      --text:      #e0e0e0;
+      --muted:     #888;
+      --danger:    #c0392b;
+      --mono:      'IBM Plex Mono', monospace;
+      --sans:      'IBM Plex Sans', sans-serif;
+    }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+    /* ── Nav ── */
+    nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; gap: 2rem; height: 48px; }
+    nav .brand { font-family: var(--mono); font-weight: 600; color: var(--amber); font-size: 0.9rem; text-decoration: none; }
+    nav a { color: var(--muted); text-decoration: none; font-size: 0.85rem; font-family: var(--mono); padding: 4px 0; border-bottom: 2px solid transparent; }
+    nav a:hover { color: var(--text); }
+    nav a.active { color: var(--amber); border-bottom-color: var(--amber); }
+
+    /* ── Layout ── */
+    .page { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; padding: 2rem; max-width: 1400px; margin: 0 auto; }
+    @media (max-width: 900px) { .page { grid-template-columns: 1fr; } }
+
+    /* ── Cards ── */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1.5rem; }
+    .card h2 { font-family: var(--mono); font-size: 0.85rem; color: var(--amber); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1.25rem; }
+
+    /* ── Forms ── */
+    .field { margin-bottom: 1rem; }
+    .field label { display: block; font-size: 0.78rem; color: var(--muted); font-family: var(--mono); margin-bottom: 0.35rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .field input, .field select, .field textarea {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); font-family: var(--mono); font-size: 0.85rem;
+      padding: 0.5rem 0.75rem; border-radius: 3px; outline: none;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--amber); }
+    .field textarea { resize: vertical; min-height: 60px; }
+    .field select option { background: var(--surface); }
+
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+    /* ── Inline new vendor ── */
+    #new-vendor-section { margin-top: 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; padding: 1rem; display: none; }
+    #new-vendor-section.visible { display: block; }
+    #new-vendor-section h4 { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); text-transform: uppercase; margin-bottom: 0.75rem; }
+
+    /* ── Buttons ── */
+    .btn { font-family: var(--mono); font-size: 0.8rem; padding: 0.5rem 1.25rem; border-radius: 3px; border: none; cursor: pointer; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .btn-primary { background: var(--amber); color: #000; }
+    .btn-primary:hover { background: var(--amber-dim); }
+    .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+    .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 0.25rem 0.6rem; font-size: 0.72rem; }
+    .btn-danger:hover { background: var(--danger); color: #fff; }
+    .btn-link { background: none; border: none; color: var(--amber); font-family: var(--mono); font-size: 0.78rem; cursor: pointer; padding: 0; text-decoration: underline; }
+    .form-actions { display: flex; gap: 0.75rem; margin-top: 1.25rem; }
+
+    /* ── Expenses list ── */
+    .expense-list { display: flex; flex-direction: column; gap: 0; }
+    .expense-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto auto;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.65rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.82rem;
+    }
+    .expense-row:last-child { border-bottom: none; }
+    .expense-vendor { font-family: var(--mono); color: var(--text); }
+    .expense-desc { font-size: 0.75rem; color: var(--muted); font-family: var(--mono); }
+    .expense-date { font-family: var(--mono); color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
+    .expense-amount { font-family: var(--mono); color: var(--amber); text-align: right; white-space: nowrap; }
+
+    /* ── Totals ── */
+    .totals { margin-top: 1.25rem; border-top: 1px solid var(--border); padding-top: 1rem; display: flex; flex-direction: column; gap: 0.4rem; }
+    .totals-row { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 0.82rem; color: var(--muted); }
+    .totals-row.grand { color: var(--amber); font-weight: 600; font-size: 0.92rem; border-top: 1px solid var(--border); padding-top: 0.5rem; margin-top: 0.25rem; }
+
+    /* ── Empty state ── */
+    .empty { color: var(--muted); font-family: var(--mono); font-size: 0.8rem; padding: 1rem 0; }
+
+    /* ── Status message ── */
+    #status-msg { font-family: var(--mono); font-size: 0.8rem; margin-top: 0.75rem; min-height: 1.2em; color: var(--amber); }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="brand">EBA</a>
+  <a href="/">Estimates</a>
+  <a href="/invoices">Invoices</a>
+  <a href="/expenses" class="active">Expenses</a>
+</nav>
+
+<div class="page">
+
+  <!-- ── LEFT: Log Expense Form ── -->
+  <div class="card">
+    <h2>Log Expense</h2>
+
+    <!-- Vendor selector -->
+    <div class="field">
+      <label>Vendor</label>
+      <select id="vendor-select">
+        <option value="">— select vendor —</option>
+      </select>
+    </div>
+    <button class="btn-link" id="toggle-new-vendor">+ New Vendor</button>
+
+    <!-- Inline new vendor form -->
+    <div id="new-vendor-section">
+      <h4>New Vendor</h4>
+      <div class="field"><label>Name *</label><input type="text" id="new-vendor-name" /></div>
+      <div class="row-2">
+        <div class="field"><label>Phone</label><input type="text" id="new-vendor-phone" /></div>
+        <div class="field"><label>Email</label><input type="text" id="new-vendor-email" /></div>
+      </div>
+      <div class="field"><label>Notes</label><textarea id="new-vendor-notes"></textarea></div>
+      <button class="btn btn-ghost" id="save-vendor-btn">Save Vendor</button>
+    </div>
+
+    <div style="margin-top:1.25rem"></div>
+
+    <!-- Expense fields -->
+    <div class="row-2">
+      <div class="field"><label>Amount *</label><input type="number" id="exp-amount" min="0" step="0.01" placeholder="0.00" /></div>
+      <div class="field"><label>GST Paid</label><input type="number" id="exp-gst" min="0" step="0.01" placeholder="0.00" /></div>
+    </div>
+    <div class="field"><label>Expense Date *</label><input type="date" id="exp-date" /></div>
+    <div class="field"><label>Description</label><input type="text" id="exp-desc" placeholder="Optional" /></div>
+
+    <div class="form-actions">
+      <button class="btn btn-primary" id="save-expense-btn">Log Expense</button>
+      <button class="btn btn-ghost" id="clear-btn">Clear</button>
+    </div>
+    <div id="status-msg"></div>
+  </div>
+
+  <!-- ── RIGHT: Expenses List ── -->
+  <div class="card">
+    <h2>Expenses — COGS</h2>
+    <div class="expense-list" id="expense-list">
+      <div class="empty">No expenses logged yet.</div>
+    </div>
+    <div class="totals" id="totals-section" style="display:none">
+      <div class="totals-row"><span>Subtotal</span><span id="total-subtotal">$0.00</span></div>
+      <div class="totals-row"><span>GST Paid</span><span id="total-gst">$0.00</span></div>
+      <div class="totals-row grand"><span>Total Spent</span><span id="total-grand">$0.00</span></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ── Helpers ──
+  const fmt = n => '$' + (parseFloat(n) || 0).toFixed(2);
+  const el  = id => document.getElementById(id);
+  const statusMsg = (msg, ok = true) => {
+    el('status-msg').textContent = msg;
+    el('status-msg').style.color = ok ? 'var(--amber)' : '#c0392b';
+  };
+
+  // ── Set today as default date ──
+  el('exp-date').value = new Date().toISOString().split('T')[0];
+
+  // ── Load vendors into dropdown ──
+  async function loadVendors(selectId = 'vendor-select') {
+    const res = await fetch('/api/vendors');
+    const vendors = await res.json();
+    const sel = el(selectId);
+    // preserve current selection
+    const current = sel.value;
+    sel.innerHTML = '<option value="">— select vendor —</option>';
+    vendors.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.id;
+      opt.textContent = v.name;
+      sel.appendChild(opt);
+    });
+    if (current) sel.value = current;
+    return vendors;
+  }
+
+  // ── Load expenses list ──
+  async function loadExpenses() {
+    const res = await fetch('/api/expenses');
+    const expenses = await res.json();
+    const list = el('expense-list');
+    const totals = el('totals-section');
+
+    if (!expenses.length) {
+      list.innerHTML = '<div class="empty">No expenses logged yet.</div>';
+      totals.style.display = 'none';
+      return;
+    }
+
+    let subtotal = 0, gstTotal = 0;
+    list.innerHTML = '';
+
+    expenses.forEach(exp => {
+      subtotal += parseFloat(exp.amount) || 0;
+      gstTotal += parseFloat(exp.gst_paid) || 0;
+
+      const row = document.createElement('div');
+      row.className = 'expense-row';
+
+      const label = exp.vendor_name || '—';
+      const desc  = exp.description ? `<div class="expense-desc">${exp.description}</div>` : '';
+
+      row.innerHTML = `
+        <div>
+          <div class="expense-vendor">${label}</div>
+          ${desc}
+        </div>
+        <div class="expense-date">${exp.expense_date}</div>
+        <div class="expense-amount">${fmt(exp.amount)}</div>
+        <button class="btn btn-danger" data-id="${exp.id}">Del</button>
+      `;
+      list.appendChild(row);
+    });
+
+    // Totals
+    const grand = subtotal + gstTotal;
+    el('total-subtotal').textContent = fmt(subtotal);
+    el('total-gst').textContent       = fmt(gstTotal);
+    el('total-grand').textContent     = fmt(grand);
+    totals.style.display = 'flex';
+
+    // Delete handlers
+    list.querySelectorAll('[data-id]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Delete this expense?')) return;
+        await fetch(`/api/expenses/${btn.dataset.id}`, { method: 'DELETE' });
+        loadExpenses();
+      });
+    });
+  }
+
+  // ── Toggle new vendor form ──
+  el('toggle-new-vendor').addEventListener('click', () => {
+    const sec = el('new-vendor-section');
+    sec.classList.toggle('visible');
+    el('toggle-new-vendor').textContent = sec.classList.contains('visible') ? '− Cancel' : '+ New Vendor';
+  });
+
+  // ── Save new vendor ──
+  el('save-vendor-btn').addEventListener('click', async () => {
+    const name = el('new-vendor-name').value.trim();
+    if (!name) { statusMsg('Vendor name is required.', false); return; }
+    const res = await fetch('/api/vendors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        phone: el('new-vendor-phone').value.trim(),
+        email: el('new-vendor-email').value.trim(),
+        notes: el('new-vendor-notes').value.trim()
+      })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      await loadVendors();
+      el('vendor-select').value = data.id;
+      // Reset inline form
+      el('new-vendor-name').value = '';
+      el('new-vendor-phone').value = '';
+      el('new-vendor-email').value = '';
+      el('new-vendor-notes').value = '';
+      el('new-vendor-section').classList.remove('visible');
+      el('toggle-new-vendor').textContent = '+ New Vendor';
+      statusMsg('Vendor saved.');
+    } else {
+      statusMsg(data.error || 'Error saving vendor.', false);
+    }
+  });
+
+  // ── Log expense ──
+  el('save-expense-btn').addEventListener('click', async () => {
+    const amount = el('exp-amount').value;
+    const date   = el('exp-date').value;
+    if (!amount || !date) { statusMsg('Amount and date are required.', false); return; }
+    const res = await fetch('/api/expenses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        vendor_id:    el('vendor-select').value || null,
+        amount:       parseFloat(amount),
+        gst_paid:     parseFloat(el('exp-gst').value) || null,
+        expense_date: date,
+        description:  el('exp-desc').value.trim() || null,
+        category:     'cogs'
+      })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      statusMsg('Expense logged.');
+      el('exp-amount').value = '';
+      el('exp-gst').value    = '';
+      el('exp-desc').value   = '';
+      el('vendor-select').value = '';
+      el('exp-date').value   = new Date().toISOString().split('T')[0];
+      loadExpenses();
+    } else {
+      statusMsg(data.error || 'Error logging expense.', false);
+    }
+  });
+
+  // ── Clear form ──
+  el('clear-btn').addEventListener('click', () => {
+    el('exp-amount').value = '';
+    el('exp-gst').value    = '';
+    el('exp-desc').value   = '';
+    el('vendor-select').value = '';
+    el('exp-date').value   = new Date().toISOString().split('T')[0];
+    statusMsg('');
+  });
+
+  // ── Init ──
+  loadVendors();
+  loadExpenses();
+</script>
+</body>
+</html>

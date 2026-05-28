@@ -429,6 +429,114 @@ def delete_payment(payment_id):
     conn.commit()
     return jsonify({'success': True})
 
+# =============================================================================
+# VENDORS
+# -----------------------------------------------------------------------------
+# GET  /customers      → returns all customers as JSON (used to populate
+#                        the customer dropdown in the estimate form)
+# POST /customers      → creates a new customer from form data, returns
+#                        the new customer's id and name as JSON
+# =============================================================================
+
+@app.route('/api/vendors', methods=['GET'])
+def get_vendors():
+    # Returns all vendors for dropdowns and future vendor management UI
+    conn = get_db()
+    vendors = conn.execute('SELECT * FROM vendors ORDER BY name ASC').fetchall()
+    conn.close()
+    return jsonify([dict(v) for v in vendors])
+
+
+@app.route('/api/vendors', methods=['POST'])
+def create_vendor():
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    if not name:
+        return jsonify({'error': 'Vendor name is required'}), 400
+    conn = get_db()
+    cursor = conn.execute(
+        'INSERT INTO vendors (name, phone, email, notes) VALUES (?, ?, ?, ?)',
+        (name, data.get('phone', ''), data.get('email', ''), data.get('notes', ''))
+    )
+    conn.commit()
+    vendor_id = cursor.lastrowid
+    conn.close()
+    return jsonify({'id': vendor_id, 'name': name}), 201
+
+# =============================================================================
+# ROUTE: Expenses page
+# -----------------------------------------------------------------------------
+# Serves the expenses HTML page. Fetches all expenses with vendor name
+# joined in, same pattern as the index route for estimates.
+# =============================================================================
+
+@app.route('/expenses')
+def expenses_page():
+    return render_template('expenses.html')
+
+
+# =============================================================================
+# EXPENSES
+# -----------------------------------------------------------------------------
+# Same pattern as create_estimate. Accepts the full expense payload as JSON:
+# header fields + line items array.
+#
+# Expense number is auto-generated here using the same approach as estimates:
+# count existing invoices and zero-pad the next number (EXP-001, EXP-002...).
+# =============================================================================
+
+@app.route('/api/expenses', methods=['GET'])
+def get_expenses():
+    # Returns all expenses joined with vendor name for display
+    conn = get_db()
+    expenses = conn.execute('''
+        SELECT e.*, v.name AS vendor_name
+        FROM expenses e
+        LEFT JOIN vendors v ON e.vendor_id = v.id
+        ORDER BY e.expense_date DESC
+    ''').fetchall()
+    conn.close()
+    return jsonify([dict(e) for e in expenses])
+
+
+@app.route('/api/expenses', methods=['POST'])
+def create_expense():
+    data = request.get_json()
+    # amount and expense_date are the only required fields
+    amount = data.get('amount')
+    expense_date = data.get('expense_date', '').strip()
+    if not amount or not expense_date:
+        return jsonify({'error': 'Amount and expense date are required'}), 400
+    conn = get_db()
+    cursor = conn.execute(
+        '''INSERT INTO expenses
+           (vendor_id, invoice_id, estimate_id, category, description, amount, gst_paid, expense_date)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+        (
+            data.get('vendor_id') or None,
+            data.get('invoice_id') or None,
+            data.get('estimate_id') or None,
+            data.get('category', 'cogs'),
+            data.get('description', '').strip() or None,
+            amount,
+            data.get('gst_paid') or None,
+            expense_date
+        )
+    )
+    conn.commit()
+    expense_id = cursor.lastrowid
+    conn.close()
+    return jsonify({'id': expense_id}), 201
+
+
+@app.route('/api/expenses/<int:expense_id>', methods=['DELETE'])
+def delete_expense(expense_id):
+    conn = get_db()
+    conn.execute('DELETE FROM expenses WHERE id = ?', (expense_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'deleted': expense_id})
+
 
 # =============================================================================
 # RUN

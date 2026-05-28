@@ -52,7 +52,8 @@ eba-c/
 ├── venv/                   # Python virtual environment (not committed to git)
 ├── templates/
 │   ├── index.html          # Estimates page: list + form
-│   └── invoices.html       # Invoices page: list + form
+│   ├── invoices.html       # Invoices page: list + form
+│   └── expenses.html       # Expenses page: list + form
 ├── app.py                  # Flask server — routes and database queries
 ├── create_db.py            # Run once to create/verify database schema
 ├── ebaccounting.db         # SQLite database file (not committed to git)
@@ -163,6 +164,34 @@ method        / TEXT    / e-transfer / cheque / cash / credit card / bitcoin
 notes         / TEXT    / Optional — post-dated, deposit, etc.
 created_at    / TEXT    / Auto-set
 
+### `vendors`
+Reusable vendor records. Created once, referenced by expenses.
+
+| Column     | Type    | Notes                        |
+|------------|---------|------------------------------|
+| id         | INTEGER | Primary key, auto-increment  |
+| name       | TEXT    | Required                     |
+| phone      | TEXT    |                              |
+| email      | TEXT    |                              |
+| notes      | TEXT    |                              |
+| created_at | TEXT    | Auto-set to datetime('now')  |
+
+### `expenses`
+One row per expense. Cash-basis: recorded when money leaves.
+
+| Column       | Type    | Notes                                           |
+|--------------|---------|-------------------------------------------------|
+| id           | INTEGER | Primary key, auto-increment                     |
+| vendor_id    | INTEGER | Nullable FK → vendors.id                        |
+| invoice_id   | INTEGER | Nullable FK → invoices.id (future job costing)  |
+| estimate_id  | INTEGER | Nullable FK → estimates.id (future job costing) |
+| category     | TEXT    | Defaults to 'cogs' — full picker in later sprint|
+| description  | TEXT    | Optional                                        |
+| amount       | REAL    | Required                                        |
+| gst_paid     | REAL    | Nullable — entered manually, no rate logic yet  |
+| expense_date | TEXT    | Required                                        |
+| created_at   | TEXT    | Auto-set                                        |
+
 ---
 
 ## Phased Roadmap
@@ -188,17 +217,44 @@ invoices by invoice_id, with one row per payment. Balance owing is
 calculated dynamically from invoice grand total minus SUM(payments.amount).
 Balance is never stored — same principle as line item totals.
 
+### Phase 4 Design Note
+Expenses are recorded on a cash basis — one row per expense, logged when
+money leaves. Vendor, invoice, and estimate FKs are all nullable so expenses
+can be logged without those relationships for now, with job costing available
+as a later bolt-on.
+
+Category defaults to 'cogs' for v0. The column exists and accepts any string,
+so a full category picker (overhead, other, CRA-specific labels) can be added
+in a later sprint without schema changes.
+
+GST paid is a flat nullable field — you enter what you paid, no rate logic.
+A `tax_rates` table with named, configurable rates for both sales and purchase
+taxes is planned for a later sprint.
+
+Expense line items are not implemented in v0. The flat `amount` field maps
+cleanly to a single line item, making a future migration to an
+`expense_line_items` child table mechanical and scriptable when the time comes.
+
 ---
 
-## Cleanup Backlog
+## V0 Cleanup Backlog
 Items deferred from active sprints. To be addressed in a dedicated cleanup
 session after the dashboard sprint.
 
 - **Filter accepted estimates from the estimates list.** Once an estimate is
   converted to an invoice, it crowds the active list. Need a way to hide
   accepted estimates by default with an option to recall them if needed.
+- Add 'edit customers' function to update customer info
 
 ---
+
+## Future versions 
+Items deferred to later version (v1,v2,etc) to keep v0 mission-focused
+
+- Taxes: When the time comes, the clean solution is a tax_rates table — name, rate, applies_to (sales/purchases/both), jurisdiction, whatever. Then expenses and invoices reference it by ID. That's a self-contained sprint that doesn't touch anything already built — just adds the table, updates the UI dropdowns, done.
+- Accounts Payable: To support that properly later you'd want something like a bills table (the obligation) and a bill_payments table (the cash out) — same pattern as invoices/payments but on the expense side. The current expenses table is cash-only by nature.
+- Expense line items: We'll need a migration from 
+- Right before going live: grab Wave CSVs to secure historical data and see if we can port it to our new app without too much yak shaving. Otherwise archive and start with fresh data.
 
 ## Key Design Decisions (and Why)
 
@@ -230,6 +286,21 @@ significant complexity with no benefit at this stage.
 ---
 
 ## Changelog
+
+### v004 — 2026-05-28
+
+- Phase 4 complete
+- SQLite tables added: vendors, expenses
+- Flask routes added: GET /api/vendors, POST /api/vendors,
+  GET /api/expenses, POST /api/expenses, DELETE /api/expenses/<id>,
+  GET /expenses (page)
+- expenses.html — new expenses page, same industrial dark aesthetic
+- Nav updated on all three pages (Estimates / Invoices / Expenses)
+- Log Expense form: vendor selector + inline new vendor, amount, GST paid,
+  date, description (optional)
+- Expenses list with subtotal, GST paid, and total spent
+- Category hardcoded to 'cogs' for v0 — column exists for future picker
+- Expense date defaults to today
 
 ### v003 — 2026-05-26
 

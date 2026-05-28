@@ -177,6 +177,41 @@ CREATE TABLE IF NOT EXISTS payments (
 # Accepted values for 'method' (enforced in the UI, not the DB):
 # cheque | e-transfer | cash | credit card | bitcoin
 
+# --- Vendors ---
+    # Reusable vendor records. Created once, referenced by expenses.
+    # vendor_id on expenses is nullable so expenses can be logged without a vendor record.
+CREATE_VENDORS = """
+CREATE TABLE IF NOT EXISTS vendors (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL,
+    phone       TEXT,
+    email       TEXT,
+    notes       TEXT,
+    created_at  TEXT DEFAULT (datetime('now'))
+);
+"""
+
+    # --- Expenses ---
+    # One row per expense. Cash-basis: recorded when money leaves.
+    # vendor_id, invoice_id, estimate_id are all nullable FKs — for future job costing and AP workflows.
+    # category defaults to 'cogs' for v0 — full category picker comes in a later sprint.
+    # gst_paid is nullable — just a number you type in, no rate logic yet.
+    # description is optional — vendor name carries enough context for now.
+CREATE_EXPENSES = """
+CREATE TABLE IF NOT EXISTS expenses (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor_id    INTEGER REFERENCES vendors(id),
+    invoice_id   INTEGER REFERENCES invoices(id),
+    estimate_id  INTEGER REFERENCES estimates(id),
+    category     TEXT DEFAULT 'cogs',
+    description  TEXT,
+    amount       REAL NOT NULL,
+    gst_paid     REAL,
+    expense_date TEXT NOT NULL,
+    created_at   TEXT DEFAULT (datetime('now'))
+);
+"""
+
 
 # =============================================================================
 # MAIN — CREATE ALL TABLES
@@ -210,6 +245,12 @@ if __name__ == "__main__":
 
     cursor.execute(CREATE_PAYMENTS)
     print("✓ Table 'payments' ready")
+
+    cursor.execute(CREATE_VENDORS)
+    print("✓ Table 'vendors' ready")
+
+    cursor.execute(CREATE_EXPENSES)
+    print("✓ Table 'expenses' ready")
 
 
     conn.commit()
