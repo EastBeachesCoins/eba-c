@@ -509,6 +509,7 @@
         <button class="btn btn-ghost" onclick="resetForm()">Clear</button>
         <button class="btn btn-ghost hidden" id="convert-btn" onclick="convertToInvoice()">→ Convert to Invoice</button>
         <button class="btn btn-primary" onclick="saveEstimate()">Save Estimate</button>
+        <button type="button" onclick="openPrint()" id="printEstimateBtn" style="display:none">Print / PDF</button>
     </div>
 
     </div>
@@ -534,6 +535,7 @@
   <script>
 
     const GST_RATE = 0.05;
+    let currentEstimateId = null;
 
     // -------------------------------------------------------
     // 1. PAGE INIT
@@ -719,11 +721,12 @@
       const est = await res.json();
 
       document.getElementById("estimate-id").value            = est.id;
-      document.getElementById("estimate-number").value        = est.estimate_number;
       document.getElementById("customer-reference").value     = est.customer_reference || "";
       document.getElementById("estimate-status").value        = est.status;
       document.getElementById("estimate-notes").value         = est.notes || "";
       document.getElementById("customer-select").value        = est.customer_id;
+      currentEstimateId = est.id;
+      document.getElementById('printEstimateBtn').style.display = 'inline-block';
 
       // Clear and repopulate line items
       document.getElementById("line-items-container").innerHTML = "";
@@ -795,6 +798,12 @@ async function convertToInvoice() {
     const err = await res.json();
     showToast(err.error || "Conversion failed.", true);
   }
+}
+
+// print estimate PDF
+function openPrint() {
+    console.log('estimate id:', currentEstimateId);
+    window.open(`/estimates/${currentEstimateId}/print`, '_blank');
 }
 
   </script>

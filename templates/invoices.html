@@ -349,7 +349,7 @@
 
 .payment-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 2fr 36px;
+  grid-template-columns: 1fr 1fr 1fr 2fr 110px 36px;
   gap: 8px;
   align-items: center;
   padding: 8px 4px;
@@ -569,6 +569,8 @@
       <div class="btn-row">
         <button class="btn btn-ghost" onclick="resetForm()">Clear</button>
         <button class="btn btn-primary" onclick="saveInvoice()">Save Invoice</button>
+        <button type="button" onclick="openInvoicePrint()" id="printInvoiceBtn" style="display:none">Print / PDF</button>
+        <button type="button" onclick="openReceipt()" id="printReceiptBtn" style="display:none">Receipt</button>
       </div>
  
     </div>
@@ -652,6 +654,7 @@
   <script>
  
     const GST_RATE = 0.05;
+    let currentInvoiceId = null;
  
     // -------------------------------------------------------
     // 1. PAGE INIT
@@ -861,6 +864,8 @@
       document.getElementById("invoice-issued").value        = inv.issued_date || "";
       document.getElementById("invoice-due").value           = inv.due_date || "";
       document.getElementById("customer-select").value       = inv.customer_id;
+      currentInvoiceId = inv.id;
+      document.getElementById('printInvoiceBtn').style.display = 'inline-block';
  
       // Show source estimate banner if this invoice came from one
       const banner = document.getElementById("estimate-source-banner");
@@ -952,6 +957,7 @@ async function loadPayments(invoiceId) {
           <span>${fmt(p.amount)}</span>
           <span>${p.method || '—'}</span>
           <span style="color: var(--muted);">${p.notes || '—'}</span>
+          <button class="btn btn--accent" style="white-space: nowrap;" onclick="window.open('/invoices/${invoiceId}/receipt', '_blank')">Print/PDF</button>
           <button class="btn btn-danger" onclick="deletePayment(${p.id}, ${invoiceId})">✕</button>
         </div>
       `).join("")}
@@ -1004,6 +1010,16 @@ async function deletePayment(paymentId, invoiceId) {
       t.className = isError ? "error show" : "show";
       setTimeout(() => t.className = t.className.replace("show", "").trim(), 2800);
     }
+
+// save invoices and paymnents receipts as PDFs
+function openInvoicePrint() {
+    console.log('invoice id:', currentInvoiceId);
+    window.open(`/invoices/${currentInvoiceId}/print`, '_blank');
+}
+
+function openReceipt() {
+    window.open(`/invoices/${currentInvoiceId}/receipt`, '_blank');
+}
  
   </script>
  

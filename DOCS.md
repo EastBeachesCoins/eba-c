@@ -1,6 +1,6 @@
 # EBAccounting — Project Documentation
-> Last updated: 2026-05-26
-> Version: v003
+> Last updated: 2026-06-02
+> Version: v005
 
 ---
 
@@ -53,7 +53,10 @@ eba-c/
 ├── templates/
 │   ├── index.html          # Estimates page: list + form
 │   ├── invoices.html       # Invoices page: list + form
-│   └── expenses.html       # Expenses page: list + form
+│   ├── expenses.html       # Expenses page: list + form
+│   ├── print_estimate.html    # Print/PDF view for estimates
+│   ├── print_invoice.html     # Print/PDF view for invoices
+│   └── print_receipt.html     # Print/PDF view for payment receipts
 ├── app.py                  # Flask server — routes and database queries
 ├── create_db.py            # Run once to create/verify database schema
 ├── ebaccounting.db         # SQLite database file (not committed to git)
@@ -201,7 +204,7 @@ One row per expense. Cash-basis: recorded when money leaves.
 | 1     | Customers, Estimates, Line Items   | ✅ Complete |
 | 2     | Invoices (convert from estimates)  | ✅ Complete |
 | 3     | Payments incl. partial payments    | ✅ Complete |
-| 4     | Expenses / COGS                    | Planned     |
+| 4     | Expenses / COGS                    | ✅ Complete |
 | 5     | Dashboard (gross profit, due, etc) | Planned     |
 
 ### Phase 2 Design Note
@@ -234,6 +237,21 @@ taxes is planned for a later sprint.
 Expense line items are not implemented in v0. The flat `amount` field maps
 cleanly to a single line item, making a future migration to an
 `expense_line_items` child table mechanical and scriptable when the time comes.
+
+### Phase 5 Design Note
+Print templates are standalone HTML files rendered by Flask and served at
+dedicated routes (/estimates/<id>/print, /invoices/<id>/print,
+/invoices/<id>/receipt). They open in a new browser tab and the user saves
+as PDF from there — no server-side PDF generation needed.
+sent_at is a nullable TEXT column on estimates, invoices, and payments.
+It is stamped via a POST to /api/<type>/<id>/send when the user clicks
+"Mark as Sent" on the print view. Single timestamp per record — last sent
+semantics. A full send log is deferred to the cloud link sprint.
+The receipt template receives line_items from the route even though it doesn't
+display them — they are needed to calculate the invoice grand total so balance
+owing can be shown correctly.
+Cloud link sharing (generate a shareable URL for customers) is deferred to a
+future sprint. The sent_at column is forward-compatible with that feature.
 
 ---
 
@@ -286,6 +304,36 @@ significant complexity with no benefit at this stage.
 ---
 
 ## Changelog
+
+### v005 — 2026-06-02
+
+Phase 5 complete — Print / Send to Customer
+Schema migration: sent_at TEXT column added to estimates, invoices, payments
+Flask routes added:
+
+POST /api/estimates/<id>/send — stamps sent_at, sets status to 'sent'
+POST /api/invoices/<id>/send — stamps sent_at, sets status to 'sent'
+POST /api/payments/<id>/send — stamps sent_at on payment row
+GET /estimates/<id>/print — renders print_estimate.html
+GET /invoices/<id>/print — renders print_invoice.html
+GET /invoices/<id>/receipt — renders print_receipt.html
+
+
+Three print templates added (Libre Baskerville + Source Sans 3, light theme):
+
+print_estimate.html — logo, parties, line items, GST, totals, notes,
+signature lines, 30-day validity footer
+print_invoice.html — logo, parties, dates, line items, balance owing,
+payment status badge, no signature line
+print_receipt.html — logo, parties, invoice summary bar, payment history
+table, balance owing, "Paid in Full" stamp when balance is zero
+
+
+static/ folder added with logo.png (East Beaches Floor & Tile)
+Print / PDF button added to estimate form (visible when estimate loaded)
+Print / PDF button added to invoice form (visible when invoice loaded)
+Print / PDF button added per row in payment history (opens receipt)
+All print views hide screen controls on print via @media print
 
 ### v004 — 2026-05-28
 

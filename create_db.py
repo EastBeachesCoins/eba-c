@@ -61,7 +61,8 @@ CREATE TABLE IF NOT EXISTS estimates (
     status              TEXT    NOT NULL DEFAULT 'draft',
     notes               TEXT,
     created_at          TEXT    DEFAULT (datetime('now')),
-    updated_at          TEXT    DEFAULT (datetime('now'))
+    updated_at          TEXT    DEFAULT (datetime('now')),
+    sent_at             TEXT
 );
 """
 
@@ -120,7 +121,8 @@ CREATE TABLE IF NOT EXISTS invoices (
     issued_date         TEXT,
     due_date            TEXT,
     created_at          TEXT    DEFAULT (datetime('now')),
-    updated_at          TEXT    DEFAULT (datetime('now'))
+    updated_at          TEXT    DEFAULT (datetime('now')),
+    sent_at             TEXT
 );
 """
 
@@ -171,7 +173,8 @@ CREATE TABLE IF NOT EXISTS payments (
     payment_date    TEXT    NOT NULL,
     method          TEXT,
     notes           TEXT,
-    created_at      TEXT    DEFAULT (datetime('now'))
+    created_at      TEXT    DEFAULT (datetime('now')),
+    sent_at         TEXT
 );
 """
 # Accepted values for 'method' (enforced in the UI, not the DB):

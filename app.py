@@ -537,6 +537,147 @@ def delete_expense(expense_id):
     conn.close()
     return jsonify({'deleted': expense_id})
 
+# -------------------------------------------------------------------------
+# MARK AS SENT
+# Sets sent_at timestamp and updates status to 'sent' on estimates/invoices
+# payments just get the timestamp — no status column to update
+# -------------------------------------------------------------------------
+
+@app.route('/api/estimates/<int:estimate_id>/send', methods=['POST'])
+def send_estimate(estimate_id):
+    conn = get_db()
+    conn.execute('''
+        UPDATE estimates
+        SET sent_at = datetime('now'), status = 'sent'
+        WHERE id = ?
+    ''', (estimate_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/invoices/<int:invoice_id>/send', methods=['POST'])
+def send_invoice(invoice_id):
+    conn = get_db()
+    conn.execute('''
+        UPDATE invoices
+        SET sent_at = datetime('now'), status = 'sent'
+        WHERE id = ?
+    ''', (invoice_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/payments/<int:payment_id>/send', methods=['POST'])
+def send_payment(payment_id):
+    conn = get_db()
+    conn.execute('''
+        UPDATE payments
+        SET sent_at = datetime('now')
+        WHERE id = ?
+    ''', (payment_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+# -------------------------------------------------------------------------
+# PRINT VIEWS
+# Return standalone HTML pages for printing / saving as PDF
+# Each route fetches all data needed for that document type
+# -------------------------------------------------------------------------
+
+@app.route('/estimates/<int:estimate_id>/print')
+def print_estimate(estimate_id):
+    conn = get_db()
+
+    estimate = conn.execute('''
+        SELECT e.*, c.name as customer_name, c.email as customer_email,
+               c.phone as customer_phone, c.address as customer_address
+        FROM estimates e
+        JOIN customers c ON e.customer_id = c.id
+        WHERE e.id = ?
+    ''', (estimate_id,)).fetchone()
+
+    line_items = conn.execute('''
+        SELECT * FROM estimate_line_items WHERE estimate_id = ?
+    ''', (estimate_id,)).fetchall()
+
+    conn.close()
+
+    if not estimate:
+        return "Estimate not found", 404
+
+    return render_template('print_estimate.html',
+                           estimate=estimate,
+                           line_items=line_items)
+
+
+@app.route('/invoices/<int:invoice_id>/print')
+def print_invoice(invoice_id):
+    conn = get_db()
+
+    invoice = conn.execute('''
+        SELECT i.*, c.name as customer_name, c.email as customer_email,
+               c.phone as customer_phone, c.address as customer_address
+        FROM invoices i
+        JOIN customers c ON i.customer_id = c.id
+        WHERE i.id = ?
+    ''', (invoice_id,)).fetchone()
+
+    line_items = conn.execute('''
+        SELECT * FROM invoice_line_items WHERE invoice_id = ?
+    ''', (invoice_id,)).fetchall()
+
+    payments = conn.execute('''
+        SELECT * FROM payments WHERE invoice_id = ? ORDER BY payment_date ASC
+    ''', (invoice_id,)).fetchall()
+
+    conn.close()
+
+    if not invoice:
+        return "Invoice not found", 404
+
+    return render_template('print_invoice.html',
+                           invoice=invoice,
+                           line_items=line_items,
+                           payments=payments)
+
+
+@app.route('/invoices/<int:invoice_id>/receipt')
+def print_receipt(invoice_id):
+    conn = get_db()
+
+    invoice = conn.execute('''
+        SELECT i.*, c.name as customer_name, c.email as customer_email,
+               c.phone as customer_phone, c.address as customer_address
+        FROM invoices i
+        JOIN customers c ON i.customer_id = c.id
+        WHERE i.id = ?
+    ''', (invoice_id,)).fetchone()
+
+    line_items = conn.execute('''
+        SELECT * FROM invoice_line_items WHERE invoice_id = ?
+    ''', (invoice_id,)).fetchall()
+
+    payments = conn.execute('''
+        SELECT * FROM payments WHERE invoice_id = ? ORDER BY payment_date ASC
+    ''', (invoice_id,)).fetchall()
+
+    conn.close()
+
+    if not invoice:
+        return "Invoice not found", 404
+
+    # Receipt is only meaningful if at least one payment exists
+    if not payments:
+        return "No payments recorded for this invoice", 400
+
+    return render_template('print_receipt.html',
+                           invoice=invoice,
+                           line_items=line_items,
+                           payments=payments)
+
 
 # =============================================================================
 # RUN

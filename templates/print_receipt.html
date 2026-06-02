@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Receipt — {{ invoice['invoice_number'] }} — East Beaches Floor & Tile</title>
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Source+Sans+3:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* -----------------------------------------------------------------------
+       PRINT TEMPLATE — PAYMENT RECEIPT
+       Stripped down vs invoice. No line items — those belong to the invoice.
+       Hero content: payment history table + balance owing.
+       If balance is zero, a PAID IN FULL stamp treatment closes the document.
+    ----------------------------------------------------------------------- */
+
+    :root {
+      --blue:        #2B6CB0;
+      --blue-light:  #EBF4FF;
+      --gold:        #C8962E;
+      --gold-light:  #FEF9EE;
+      --ink:         #1A202C;
+      --ink-mid:     #4A5568;
+      --ink-light:   #718096;
+      --rule:        #E2E8F0;
+      --white:       #FFFFFF;
+      --green:       #276749;
+      --green-light: #F0FFF4;
+      --green-mid:   #C6F6D5;
+      --red:         #9B2C2C;
+      --red-light:   #FFF5F5;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 13px;
+      color: var(--ink);
+      background: #F7FAFC;
+      line-height: 1.5;
+    }
+
+    .page {
+      max-width: 820px;
+      margin: 32px auto;
+      background: var(--white);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+    }
+
+    /* ---- HEADER ---- */
+    .doc-header {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: center;
+      padding: 36px 48px 28px;
+      border-bottom: 3px solid var(--blue);
+    }
+
+    .logo-wrap img {
+      height: 72px;
+      width: auto;
+      display: block;
+    }
+
+    .doc-meta { text-align: right; }
+
+    .doc-type {
+      font-family: 'Libre Baskerville', serif;
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--blue);
+      letter-spacing: -0.5px;
+      line-height: 1;
+    }
+
+    .doc-sub {
+      font-size: 13px;
+      color: var(--ink-mid);
+      margin-top: 6px;
+    }
+
+    .doc-ref {
+      font-size: 12px;
+      color: var(--ink-light);
+      margin-top: 3px;
+    }
+
+    /* ---- PARTIES ---- */
+    .parties {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      padding: 0 48px;
+      background: var(--gold-light);
+      border-bottom: 1px solid #EDE0C4;
+    }
+
+    .party { padding: 24px 0; }
+
+    .party + .party {
+      padding-left: 32px;
+      border-left: 1px solid #EDE0C4;
+    }
+
+    .party-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 8px;
+    }
+
+    .party-name {
+      font-family: 'Libre Baskerville', serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 4px;
+    }
+
+    .party-detail {
+      font-size: 12px;
+      color: var(--ink-mid);
+      line-height: 1.6;
+    }
+
+    /* ---- INVOICE SUMMARY BAR ---- */
+    .summary-bar {
+      display: flex;
+      background: var(--blue-light);
+      border-bottom: 1px solid #BEE3F8;
+    }
+
+    .summary-item {
+      flex: 1;
+      padding: 16px 20px;
+      border-right: 1px solid #BEE3F8;
+    }
+
+    .summary-item:first-child { padding-left: 48px; }
+    .summary-item:last-child  { border-right: none; padding-right: 48px; }
+
+    .summary-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--blue);
+      margin-bottom: 3px;
+    }
+
+    .summary-value {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    /* ---- PAYMENT HISTORY ---- */
+    .payments-section {
+      padding: 32px 48px;
+    }
+
+    .section-title {
+      font-family: 'Libre Baskerville', serif;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--blue);
+    }
+
+    .payments-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .payments-table th {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--blue);
+      padding: 0 8px 10px;
+      text-align: left;
+    }
+
+    .payments-table th.right { text-align: right; }
+
+    .payments-table td {
+      padding: 12px 8px;
+      font-size: 13px;
+      border-bottom: 1px solid var(--rule);
+      vertical-align: middle;
+    }
+
+    .payments-table td.right { text-align: right; font-weight: 600; }
+    .payments-table tbody tr:last-child td { border-bottom: none; }
+
+    .method-chip {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: var(--ink-mid);
+      background: #EDF2F7;
+      border-radius: 3px;
+      padding: 2px 7px;
+    }
+
+    .payment-note {
+      font-size: 11px;
+      color: var(--ink-light);
+      margin-top: 2px;
+      font-style: italic;
+    }
+
+    /* ---- BALANCE SUMMARY ---- */
+    .balance-wrap {
+      display: flex;
+      justify-content: flex-end;
+      padding: 0 48px 36px;
+    }
+
+    .balance-table {
+      width: 280px;
+    }
+
+    .balance-table tr td { padding: 6px 0; font-size: 13px; }
+    .balance-table .b-label { color: var(--ink-mid); }
+    .balance-table .b-value { text-align: right; font-weight: 600; }
+
+    .balance-table .b-rule td {
+      border-top: 1px solid var(--rule);
+      padding-top: 10px;
+    }
+
+    .balance-table .b-total td {
+      font-family: 'Libre Baskerville', serif;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--blue);
+      padding-top: 4px;
+    }
+
+    .balance-table .b-paid td { color: var(--green); }
+
+    .balance-table .b-balance td {
+      font-family: 'Libre Baskerville', serif;
+      font-size: 17px;
+      font-weight: 700;
+      border-top: 2px solid var(--ink);
+      padding-top: 10px;
+    }
+
+    .balance-table .b-balance.owing td { color: var(--red); }
+    .balance-table .b-balance.clear td { color: var(--green); }
+
+    /* ---- PAID IN FULL STAMP ---- */
+    .paid-stamp {
+      margin: 0 48px 36px;
+      border: 3px solid var(--green);
+      border-radius: 6px;
+      padding: 20px 28px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      background: var(--green-light);
+    }
+
+    .stamp-icon {
+      font-size: 36px;
+      line-height: 1;
+    }
+
+    .stamp-text-main {
+      font-family: 'Libre Baskerville', serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--green);
+      line-height: 1;
+    }
+
+    .stamp-text-sub {
+      font-size: 12px;
+      color: var(--green);
+      margin-top: 4px;
+      opacity: 0.8;
+    }
+
+    /* ---- FOOTER ---- */
+    .doc-footer {
+      border-top: 3px solid var(--gold);
+      padding: 16px 48px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--gold-light);
+    }
+
+    .footer-msg  { font-size: 11px; color: var(--ink-mid); font-style: italic; }
+    .footer-info { font-size: 11px; color: var(--ink-mid); text-align: right; }
+
+    /* ---- SCREEN CONTROLS ---- */
+    .print-btn {
+      position: fixed;
+      bottom: 32px;
+      right: 32px;
+      background: var(--blue);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(43,108,176,0.4);
+    }
+
+    .print-btn:hover { background: #2C5282; }
+
+    .mark-sent-btn {
+      position: fixed;
+      bottom: 32px;
+      right: 160px;
+      background: var(--white);
+      color: var(--blue);
+      border: 2px solid var(--blue);
+      padding: 10px 20px;
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+    .mark-sent-btn:hover { background: var(--blue-light); }
+    .mark-sent-btn.sent-confirm { background: var(--green-light); color: var(--green); border-color: var(--green); }
+
+    @media print {
+      body { background: white; }
+      .page { box-shadow: none; margin: 0; max-width: 100%; }
+      .print-btn, .mark-sent-btn { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+{% set subtotal = namespace(val=0) %}
+{% set gst = namespace(val=0) %}
+{% for item in line_items %}
+  {% set subtotal.val = subtotal.val + item['quantity'] * item['unit_price'] %}
+  {% if item['taxable'] %}
+    {% set gst.val = gst.val + item['quantity'] * item['unit_price'] * 0.05 %}
+  {% endif %}
+{% endfor %}
+{% set grand_total = subtotal.val + gst.val %}
+{% set total_paid = payments | sum(attribute='amount') %}
+{% set balance = grand_total - total_paid %}
+{% set most_recent_payment = payments | last %}
+
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="doc-header">
+    <div class="logo-wrap">
+      <img src="/static/logo.png" alt="East Beaches Floor & Tile">
+    </div>
+    <div class="doc-meta">
+      <div class="doc-type">Receipt</div>
+      <div class="doc-sub">Re: {{ invoice['invoice_number'] }}</div>
+      <div class="doc-ref">Issued {{ invoice['issued_date'] or invoice['created_at'][:10] }}</div>
+    </div>
+  </div>
+
+  <!-- PARTIES -->
+  <div class="parties">
+    <div class="party">
+      <div class="party-label">From</div>
+      <div class="party-name">East Beaches Floor & Tile</div>
+      <div class="party-detail">
+        Winnipeg, MB<br>
+        eastbeachesfloortile@gmail.com
+      </div>
+    </div>
+    <div class="party">
+      <div class="party-label">Issued To</div>
+      <div class="party-name">{{ invoice['customer_name'] }}</div>
+      <div class="party-detail">
+        {% if invoice['customer_address'] %}{{ invoice['customer_address'] }}<br>{% endif %}
+        {% if invoice['customer_email'] %}{{ invoice['customer_email'] }}<br>{% endif %}
+        {% if invoice['customer_phone'] %}{{ invoice['customer_phone'] }}{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- INVOICE SUMMARY BAR -->
+  <div class="summary-bar">
+    <div class="summary-item">
+      <div class="summary-label">Invoice Total</div>
+      <div class="summary-value">${{ '%.2f' | format(grand_total) }}</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-label">Total Paid</div>
+      <div class="summary-value">${{ '%.2f' | format(total_paid) }}</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-label">Balance Owing</div>
+      <div class="summary-value" style="color: {% if balance <= 0 %}var(--green){% else %}var(--red){% endif %}">
+        ${{ '%.2f' | format(balance) }}
+      </div>
+    </div>
+    {% if invoice['customer_reference'] %}
+    <div class="summary-item">
+      <div class="summary-label">Reference</div>
+      <div class="summary-value" style="font-size:13px">{{ invoice['customer_reference'] }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- PAYMENT HISTORY -->
+  <div class="payments-section">
+    <div class="section-title">Payment History</div>
+    <table class="payments-table">
+      <thead>
+        <tr>
+          <th style="width:20%">Date</th>
+          <th style="width:20%">Method</th>
+          <th style="width:40%">Notes</th>
+          <th class="right" style="width:20%">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for payment in payments %}
+        <tr>
+          <td>{{ payment['payment_date'] }}</td>
+          <td><span class="method-chip">{{ payment['method'] }}</span></td>
+          <td>
+            {% if payment['notes'] %}
+            <div class="payment-note">{{ payment['notes'] }}</div>
+            {% else %}—{% endif %}
+          </td>
+          <td class="right">${{ '%.2f' | format(payment['amount']) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- BALANCE -->
+  <div class="balance-wrap">
+    <table class="balance-table">
+      <tr>
+        <td class="b-label">Invoice Total</td>
+        <td class="b-value">${{ '%.2f' | format(grand_total) }}</td>
+      </tr>
+      <tr class="b-rule b-paid">
+        <td class="b-label">Total Paid</td>
+        <td class="b-value">− ${{ '%.2f' | format(total_paid) }}</td>
+      </tr>
+      <tr class="b-balance {% if balance <= 0 %}clear{% else %}owing{% endif %}">
+        <td class="b-label">Balance Owing</td>
+        <td class="b-value">${{ '%.2f' | format(balance) }}</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- PAID IN FULL STAMP (only if balance is zero) -->
+  {% if balance <= 0 %}
+  <div class="paid-stamp">
+    <div class="stamp-icon">✓</div>
+    <div>
+      <div class="stamp-text-main">Paid in Full</div>
+      <div class="stamp-text-sub">Payment received {{ most_recent_payment['payment_date'] }} · Thank you!</div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- FOOTER -->
+  <div class="doc-footer">
+    <div class="footer-msg">Please retain this receipt for your records.</div>
+    <div class="footer-info">East Beaches Floor & Tile · Winnipeg, MB</div>
+  </div>
+
+</div>
+
+<button class="print-btn" onclick="window.print()">Print / Save PDF</button>
+<button class="mark-sent-btn" id="markSentBtn" onclick="markSent()">
+  {% if most_recent_payment['sent_at'] %}✓ Sent {{ most_recent_payment['sent_at'][:10] }}{% else %}Mark as Sent{% endif %}
+</button>
+
+<script>
+  // -----------------------------------------------------------------------
+  // Receipt "Mark as Sent" stamps the most recent payment row.
+  // If an invoice has multiple partial payments over time, each receipt
+  // snapshot is tied to the payment batch at that moment. For v0 we
+  // just stamp the most recent payment — sufficient for typical use.
+  // -----------------------------------------------------------------------
+  const alreadySent  = {{ 'true' if most_recent_payment['sent_at'] else 'false' }};
+  const paymentId    = {{ most_recent_payment['id'] }};
+  const btn = document.getElementById('markSentBtn');
+
+  if (alreadySent) {
+    btn.disabled = true;
+    btn.classList.add('sent-confirm');
+  }
+
+  async function markSent() {
+    if (alreadySent) return;
+    try {
+      const res = await fetch(`/api/payments/${paymentId}/send`, { method: 'POST' });
+      if (res.ok) {
+        const today = new Date().toISOString().slice(0, 10);
+        btn.textContent = `✓ Sent ${today}`;
+        btn.classList.add('sent-confirm');
+        btn.disabled = true;
+      }
+    } catch (err) {
+      alert('Could not mark as sent. Check that the app is running.');
+    }
+  }
+</script>
+
+</body>
+</html>
