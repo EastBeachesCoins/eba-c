@@ -164,16 +164,6 @@ relationships later requires migrations; adding columns does not.
 Items deferred from active sprints. To be addressed in a dedicated cleanup
 sprint. Ranked by ease + importance:
 
-1. **Header/nav alignment** — Dashboard and expenses headers sit left,
-   estimates and invoices sit right. One CSS fix, all pages.
-2. **Filter accepted estimates from estimates list** — Hide accepted/converted
-   estimates by default, toggle to show. WHERE clause change + UI button.
-3. **Filter draft invoices from invoices list** — Same pattern as above.
-   Bundle with #2, identical logic.
-4. **CSS consistency** — expenses.html uses different variable/class naming
-   than the other three pages. Not broken, just two dialects in one codebase.
-5. **Edit customers** — Inline form or modal, one new PUT route. Useful
-   before go-live.
 6. **Import Wave data** — One-time migration script from Wave CSVs. Defer
    to its own sprint immediately before go-live.
 
@@ -221,6 +211,29 @@ significant complexity with no benefit at this stage.
 ---
 
 ## Changelog
+
+### v007 — 2026-06-04
+
+Cleanup sprint — items 1–5 from v0 backlog
+
+- Header/nav alignment fixed across all four pages (dashboard, expenses were
+  inconsistent with estimates and invoices)
+- CSS dialect on expenses.html aligned to app standard (--amber → --accent,
+  --amber-dim → --accent-dim, text/muted colour values unified)
+- Estimates list now hides declined estimates by default; "Show All" / "Hide
+  Closed" toggle to reveal. Accepted estimates remain visible (still need
+  attention — deposit pending, job not started, etc.)
+- Save estimate and save invoice now PATCH existing records instead of POSTing
+  new ones — estimate/invoice numbers no longer change on update
+- Edit Customer — inline edit form on both estimates and invoices pages;
+  appears when a customer is selected, pre-filled with current data, saves
+  via PUT /api/customers/<id>
+
+Flask routes added:
+  GET  /api/customers/<id> — returns full customer record for edit form
+  PUT  /api/customers/<id> — updates customer name, email, phone, address
+  PATCH /api/estimates/<id> — updates estimate header + replaces line items
+  PATCH /api/invoices/<id>  — updates invoice header + replaces line items
 
 ### v006 — 2026-06-04
 

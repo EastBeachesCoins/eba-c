@@ -163,7 +163,7 @@ def index():
         ORDER BY e.created_at DESC
     """).fetchall()
     conn.close()
-    return render_template("index.html", estimates=estimates)
+    return render_template("index.html", estimates=[dict(e) for e in estimates])
 
 
 # =============================================================================
@@ -199,6 +199,52 @@ def customers():
         new_id = cursor.lastrowid
         conn.close()
         return jsonify({"id": new_id, "name": data.get("name")}), 201
+
+
+# =============================================================================
+# ROUTE: Single Customer — GET, PUT
+# -----------------------------------------------------------------------------
+# GET /api/customers/<id> → returns full customer record (all fields) so the
+#                           edit form can be pre-populated. The list endpoint
+#                           only returns id + name, which isn't enough to edit.
+# PUT /api/customers/<id> → updates all editable fields for an existing
+#                           customer. Returns the updated id and name.
+# =============================================================================
+
+@app.route("/api/customers/<int:customer_id>", methods=["GET", "PUT"])
+def customer(customer_id):
+    conn = get_db()
+
+    if request.method == "GET":
+        row = conn.execute(
+            "SELECT id, name, email, phone, address FROM customers WHERE id = ?",
+            (customer_id,)
+        ).fetchone()
+        conn.close()
+        if not row:
+            return jsonify({"error": "Customer not found"}), 404
+        return jsonify(dict(row))
+
+    if request.method == "PUT":
+        data = request.get_json()
+        name = (data.get("name") or "").strip()
+        if not name:
+            conn.close()
+            return jsonify({"error": "Customer name is required"}), 400
+        conn.execute("""
+            UPDATE customers
+            SET name = ?, email = ?, phone = ?, address = ?
+            WHERE id = ?
+        """, (
+            name,
+            data.get("email"),
+            data.get("phone"),
+            data.get("address"),
+            customer_id
+        ))
+        conn.commit()
+        conn.close()
+        return jsonify({"id": customer_id, "name": name})
 
 
 # =============================================================================
@@ -293,6 +339,76 @@ def get_estimate(estimate_id):
         **dict(estimate),
         "line_items": [dict(i) for i in line_items]
     })
+
+# =============================================================================
+# ROUTE: Single Estimate — PATCH (update)
+# -----------------------------------------------------------------------------
+# Updates header fields and replaces line items for an existing estimate.
+# Line items are handled as delete-and-reinsert — wipe the existing set and
+# insert the current form state fresh. No diff logic needed; same result.
+#
+# estimate_number is NOT touched — the whole point is to preserve the number
+# that was auto-generated when the estimate was first created.
+# =============================================================================
+
+@app.route("/api/estimates/<int:estimate_id>", methods=["PATCH"])
+def update_estimate(estimate_id):
+    data = request.get_json()
+    conn = get_db()
+
+    try:
+        # Verify the estimate exists
+        existing = conn.execute(
+            "SELECT id FROM estimates WHERE id = ?", (estimate_id,)
+        ).fetchone()
+        if not existing:
+            return jsonify({"error": "Estimate not found"}), 404
+
+        # Update header fields — estimate_number stays untouched
+        conn.execute("""
+            UPDATE estimates
+            SET customer_id        = ?,
+                customer_reference = ?,
+                status             = ?,
+                notes              = ?,
+                updated_at         = datetime('now')
+            WHERE id = ?
+        """, (
+            data.get("customer_id"),
+            data.get("customer_reference"),
+            data.get("status"),
+            data.get("notes"),
+            estimate_id
+        ))
+
+        # Replace line items: delete existing, insert current set
+        conn.execute(
+            "DELETE FROM estimate_line_items WHERE estimate_id = ?",
+            (estimate_id,)
+        )
+        for item in data.get("line_items", []):
+            conn.execute("""
+                INSERT INTO estimate_line_items
+                    (estimate_id, description, quantity, unit_price, taxable)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                estimate_id,
+                item.get("description"),
+                item.get("quantity"),
+                item.get("unit_price"),
+                1 if item.get("taxable") else 0
+            ))
+
+        conn.commit()
+        return jsonify({"id": estimate_id}), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        conn.close()
+
 
 # =============================================================================
 # ROUTE: Invoices — POST new
@@ -393,6 +509,78 @@ def get_invoice(invoice_id):
         **dict(invoice),
         "line_items": [dict(i) for i in line_items]
     })
+
+
+# =============================================================================
+# ROUTE: Single Invoice — PATCH (update)
+# -----------------------------------------------------------------------------
+# Updates header fields and replaces line items for an existing invoice.
+# Same delete-and-reinsert pattern as the estimate PATCH.
+#
+# invoice_number is NOT touched — it was set on creation and stays fixed.
+# estimate_id is also preserved — the source link doesn't change on update.
+# =============================================================================
+
+@app.route("/api/invoices/<int:invoice_id>", methods=["PATCH"])
+def update_invoice(invoice_id):
+    data = request.get_json()
+    conn = get_db()
+
+    try:
+        existing = conn.execute(
+            "SELECT id FROM invoices WHERE id = ?", (invoice_id,)
+        ).fetchone()
+        if not existing:
+            return jsonify({"error": "Invoice not found"}), 404
+
+        # Update all editable header fields — invoice_number and estimate_id untouched
+        conn.execute("""
+            UPDATE invoices
+            SET customer_id        = ?,
+                customer_reference = ?,
+                status             = ?,
+                notes              = ?,
+                issued_date        = ?,
+                due_date           = ?,
+                updated_at         = datetime('now')
+            WHERE id = ?
+        """, (
+            data.get("customer_id"),
+            data.get("customer_reference"),
+            data.get("status"),
+            data.get("notes"),
+            data.get("issued_date"),
+            data.get("due_date"),
+            invoice_id
+        ))
+
+        # Replace line items: delete existing, insert current set
+        conn.execute(
+            "DELETE FROM invoice_line_items WHERE invoice_id = ?",
+            (invoice_id,)
+        )
+        for item in data.get("line_items", []):
+            conn.execute("""
+                INSERT INTO invoice_line_items
+                    (invoice_id, description, quantity, unit_price, taxable)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                invoice_id,
+                item.get("description"),
+                item.get("quantity"),
+                item.get("unit_price"),
+                1 if item.get("taxable") else 0
+            ))
+
+        conn.commit()
+        return jsonify({"id": invoice_id}), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        conn.close()
 
 
 # =============================================================================

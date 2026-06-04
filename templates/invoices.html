@@ -469,13 +469,39 @@
       <div class="form-grid" style="margin-bottom: 8px;">
         <div class="form-group">
           <label for="customer-select">Select Customer</label>
-          <select id="customer-select">
+          <select id="customer-select" onchange="onCustomerChange()">
             <option value="">— choose —</option>
           </select>
         </div>
-        <div class="form-group" style="justify-content: flex-end;">
-          <label>&nbsp;</label>
+        <div class="form-group" style="justify-content: flex-end; flex-direction: row; align-items: flex-end; gap: 10px;">
+          <button class="btn btn-ghost hidden" id="edit-customer-btn" onclick="toggleEditCustomer()">Edit</button>
           <button class="btn btn-ghost" onclick="toggleNewCustomer()">+ New Customer</button>
+        </div>
+      </div>
+
+      <!-- Inline edit customer form — hidden by default -->
+      <div id="edit-customer-form" style="display:none; background: var(--bg); border: 1px solid var(--accent-dim); border-radius: var(--radius); padding: 16px; margin-top: 10px; margin-bottom: 10px;">
+        <div class="form-grid three-col" style="margin-bottom: 12px;">
+          <div class="form-group">
+            <label for="ec-name">Name *</label>
+            <input type="text" id="ec-name" />
+          </div>
+          <div class="form-group">
+            <label for="ec-email">Email</label>
+            <input type="email" id="ec-email" />
+          </div>
+          <div class="form-group">
+            <label for="ec-phone">Phone</label>
+            <input type="text" id="ec-phone" />
+          </div>
+          <div class="form-group full-width">
+            <label for="ec-address">Address</label>
+            <input type="text" id="ec-address" />
+          </div>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button class="btn btn-success" onclick="saveEditCustomer()">Save Changes</button>
+          <button class="btn btn-ghost" onclick="toggleEditCustomer()">Cancel</button>
         </div>
       </div>
  
@@ -740,6 +766,71 @@
       }
     }
  
+    // -------------------------------------------------------
+    // 2b. EDIT CUSTOMER
+    // Identical logic to index.html.
+    // -------------------------------------------------------
+ 
+    function onCustomerChange() {
+      const hasCustomer = !!document.getElementById("customer-select").value;
+      document.getElementById("edit-customer-btn").classList.toggle("hidden", !hasCustomer);
+      document.getElementById("edit-customer-form").style.display = "none";
+      document.getElementById("edit-customer-btn").textContent = "Edit";
+    }
+
+    function toggleEditCustomer() {
+      const form = document.getElementById("edit-customer-form");
+      const isOpen = form.style.display === "block";
+      if (isOpen) {
+        form.style.display = "none";
+        document.getElementById("edit-customer-btn").textContent = "Edit";
+      } else {
+        loadCustomerForEdit();
+      }
+    }
+
+    async function loadCustomerForEdit() {
+      const id = document.getElementById("customer-select").value;
+      if (!id) return;
+      const res = await fetch(`/api/customers/${id}`);
+      if (!res.ok) { showToast("Could not load customer.", true); return; }
+      const c = await res.json();
+      document.getElementById("ec-name").value    = c.name    || "";
+      document.getElementById("ec-email").value   = c.email   || "";
+      document.getElementById("ec-phone").value   = c.phone   || "";
+      document.getElementById("ec-address").value = c.address || "";
+      document.getElementById("edit-customer-form").style.display = "block";
+      document.getElementById("edit-customer-btn").textContent = "Cancel Edit";
+    }
+
+    async function saveEditCustomer() {
+      const id   = document.getElementById("customer-select").value;
+      const name = document.getElementById("ec-name").value.trim();
+      if (!name) { showToast("Customer name is required.", true); return; }
+
+      const res = await fetch(`/api/customers/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          email:   document.getElementById("ec-email").value.trim(),
+          phone:   document.getElementById("ec-phone").value.trim(),
+          address: document.getElementById("ec-address").value.trim(),
+        })
+      });
+
+      if (res.ok) {
+        showToast("Customer updated.");
+        await loadCustomers();
+        document.getElementById("customer-select").value = id;
+        document.getElementById("edit-customer-form").style.display = "none";
+        document.getElementById("edit-customer-btn").textContent = "Edit";
+      } else {
+        const err = await res.json();
+        showToast(err.error || "Update failed.", true);
+      }
+    }
+
  
     // -------------------------------------------------------
     // 3. LINE ITEM MANAGEMENT
@@ -793,13 +884,14 @@
  
     // -------------------------------------------------------
     // 4. SAVE INVOICE
-    // POSTs to /api/invoices. Invoice number is auto-generated
-    // server-side — we don't send one. On success, reloads the
-    // page so the new invoice appears in the list.
+    // If an invoice is already loaded (invoice-id is set),
+    // PATCH to update it in place — number stays the same.
+    // If no ID, POST to create a new one.
     // -------------------------------------------------------
  
     async function saveInvoice() {
       const customerId = document.getElementById("customer-select").value;
+      const invoiceId  = document.getElementById("invoice-id").value;
       if (!customerId) { showToast("Please select a customer.", true); return; }
  
       const lineItems = [];
@@ -816,9 +908,8 @@
  
       if (lineItems.length === 0) { showToast("Add at least one line item.", true); return; }
  
-      // Include source estimate_id if this was converted — otherwise omit
       const estimateId = document.getElementById("source-estimate-id").value;
- 
+
       const payload = {
         customer_id:        parseInt(customerId),
         estimate_id:        estimateId ? parseInt(estimateId) : null,
@@ -829,15 +920,19 @@
         due_date:           document.getElementById("invoice-due").value   || null,
         line_items:         lineItems
       };
+
+      const isUpdate = !!invoiceId;
+      const url      = isUpdate ? `/api/invoices/${invoiceId}` : "/api/invoices";
+      const method   = isUpdate ? "PATCH" : "POST";
  
-      const res = await fetch("/api/invoices", {
-        method: "POST",
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
  
       if (res.ok) {
-        showToast("Invoice saved!");
+        showToast(isUpdate ? "Invoice updated!" : "Invoice saved!");
         setTimeout(() => location.reload(), 800);
       } else {
         const err = await res.json();
@@ -866,6 +961,7 @@
       document.getElementById("invoice-issued").value        = inv.issued_date || "";
       document.getElementById("invoice-due").value           = inv.due_date || "";
       document.getElementById("customer-select").value       = inv.customer_id;
+      document.getElementById("edit-customer-btn").classList.remove("hidden");
       currentInvoiceId = inv.id;
       document.getElementById('printInvoiceBtn').style.display = 'inline-block';
  
@@ -997,6 +1093,8 @@ async function deletePayment(paymentId, invoiceId) {
       document.getElementById("line-items-container").innerHTML = "";
       document.getElementById("estimate-source-banner").style.display = "none";
       document.getElementById("payments-section").classList.add("hidden");
+      document.getElementById("edit-customer-btn").classList.add("hidden");
+      document.getElementById("edit-customer-form").style.display = "none";
       addLineItem();
       recalcTotals();
       setDefaultDates();

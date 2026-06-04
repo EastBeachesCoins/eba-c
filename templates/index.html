@@ -357,11 +357,13 @@
     <!-- ===========================================================
       ESTIMATES LIST
       ---------------------------------------------------------------
-      Pulled from the database on page load via Flask (Jinja2 loop).
-      Clicking a row will eventually open a view/edit mode — wired
-      up in the JS section below. Empty state shown when no records.
+      Rendered by JS from ALL_ESTIMATES (injected below). Default
+      view hides accepted and declined — toggle to show all.
     ============================================================== -->
-    <div class="section-title">Estimates</div>
+    <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px; padding-bottom:6px; border-bottom:1px solid var(--border);">
+      <span class="section-title" style="margin:0; border:none; padding:0;">Estimates</span>
+      <button class="btn btn-ghost" id="toggle-filter-btn" onclick="toggleFilter()" style="font-size:11px; padding:4px 12px;">Show All</button>
+    </div>
     <div class="card" style="padding: 0; overflow: hidden;">
       <table id="estimates-table">
         <thead>
@@ -374,23 +376,7 @@
           </tr>
         </thead>
         <tbody id="estimates-body">
-          {% if estimates %}
-            {% for est in estimates %}
-            <tr onclick="loadEstimate({{ est.id }})">
-              <td class="mono">{{ est.estimate_number }}</td>
-              <td>{{ est.customer_name }}</td>
-              <td>{{ est.customer_reference or '—' }}</td>
-              <td class="mono">{{ est.created_at[:10] }}</td>
-              <td><span class="status-badge status-{{ est.status }}">{{ est.status }}</span></td>
-            </tr>
-            {% endfor %}
-          {% else %}
-            <tr id="empty-row">
-              <td colspan="5" style="text-align:center; color: var(--muted); padding: 32px;">
-                No estimates yet. Create one below.
-              </td>
-            </tr>
-          {% endif %}
+          <!-- Populated by renderEstimatesList() on page load -->
         </tbody>
       </table>
     </div>
@@ -417,13 +403,39 @@
       <div class="form-grid" style="margin-bottom: 8px;">
         <div class="form-group">
           <label for="customer-select">Select Customer</label>
-          <select id="customer-select">
+          <select id="customer-select" onchange="onCustomerChange()">
             <option value="">— choose —</option>
           </select>
         </div>
-        <div class="form-group" style="justify-content: flex-end;">
-          <label>&nbsp;</label>
+        <div class="form-group" style="justify-content: flex-end; flex-direction: row; align-items: flex-end; gap: 10px;">
+          <button class="btn btn-ghost hidden" id="edit-customer-btn" onclick="toggleEditCustomer()">Edit</button>
           <button class="btn btn-ghost" onclick="toggleNewCustomer()">+ New Customer</button>
+        </div>
+      </div>
+
+      <!-- Inline edit customer form — hidden by default -->
+      <div id="edit-customer-form" style="display:none; background: var(--bg); border: 1px solid var(--accent-dim); border-radius: var(--radius); padding: 16px; margin-top: 10px; margin-bottom: 10px;">
+        <div class="form-grid three-col" style="margin-bottom: 12px;">
+          <div class="form-group">
+            <label for="ec-name">Name *</label>
+            <input type="text" id="ec-name" />
+          </div>
+          <div class="form-group">
+            <label for="ec-email">Email</label>
+            <input type="email" id="ec-email" />
+          </div>
+          <div class="form-group">
+            <label for="ec-phone">Phone</label>
+            <input type="text" id="ec-phone" />
+          </div>
+          <div class="form-group full-width">
+            <label for="ec-address">Address</label>
+            <input type="text" id="ec-address" />
+          </div>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button class="btn btn-success" onclick="saveEditCustomer()">Save Changes</button>
+          <button class="btn btn-ghost" onclick="toggleEditCustomer()">Cancel</button>
         </div>
       </div>
 
@@ -536,19 +548,62 @@
   ============================================================== -->
   <script>
 
+    // Flask passes all estimates as JSON so the filter toggle works
+    // without a server round-trip. Jinja renders this once on page load.
+    const ALL_ESTIMATES = {{ estimates | tojson }};
+
     const GST_RATE = 0.05;
     let currentEstimateId = null;
+    let showAllEstimates  = false;
 
     // -------------------------------------------------------
     // 1. PAGE INIT
-    // Runs once when the page loads. Fetches customers from
-    // the API to populate the dropdown, then seeds one empty
-    // line item so the form is ready to use immediately.
     // -------------------------------------------------------
     document.addEventListener("DOMContentLoaded", () => {
       loadCustomers();
       addLineItem();
+      renderEstimatesList();
     });
+
+    // -------------------------------------------------------
+    // 1b. ESTIMATES LIST — filter + render
+    // Default: hide accepted and declined.
+    // Toggle button switches between filtered and full view.
+    // -------------------------------------------------------
+
+    const HIDDEN_STATUSES = ["declined"];
+
+    function renderEstimatesList() {
+      const tbody = document.getElementById("estimates-body");
+      const list  = showAllEstimates
+        ? ALL_ESTIMATES
+        : ALL_ESTIMATES.filter(e => !HIDDEN_STATUSES.includes(e.status));
+
+      if (list.length === 0) {
+        const msg = showAllEstimates
+          ? "No estimates yet. Create one below."
+          : "No open estimates. Use <strong>Show All</strong> to see accepted and declined.";
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--muted); padding:32px;">${msg}</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = list.map(est => `
+        <tr onclick="loadEstimate(${est.id})">
+          <td class="mono">${est.estimate_number}</td>
+          <td>${est.customer_name}</td>
+          <td>${est.customer_reference || '—'}</td>
+          <td class="mono">${est.created_at.slice(0, 10)}</td>
+          <td><span class="status-badge status-${est.status}">${est.status}</span></td>
+        </tr>
+      `).join("");
+    }
+
+    function toggleFilter() {
+      showAllEstimates = !showAllEstimates;
+      document.getElementById("toggle-filter-btn").textContent =
+        showAllEstimates ? "Hide Closed" : "Show All";
+      renderEstimatesList();
+    }
 
 
     // -------------------------------------------------------
@@ -608,6 +663,75 @@
 
 
     // -------------------------------------------------------
+    // 2b. EDIT CUSTOMER
+    // Edit button appears when a customer is selected in the
+    // dropdown. Fetches the full record (name, email, phone,
+    // address) and pre-fills an inline form. Saves via PUT.
+    // -------------------------------------------------------
+
+    function onCustomerChange() {
+      const hasCustomer = !!document.getElementById("customer-select").value;
+      document.getElementById("edit-customer-btn").classList.toggle("hidden", !hasCustomer);
+      // Close edit form if the selection changes
+      document.getElementById("edit-customer-form").style.display = "none";
+      document.getElementById("edit-customer-btn").textContent = "Edit";
+    }
+
+    function toggleEditCustomer() {
+      const form = document.getElementById("edit-customer-form");
+      const isOpen = form.style.display === "block";
+      if (isOpen) {
+        form.style.display = "none";
+        document.getElementById("edit-customer-btn").textContent = "Edit";
+      } else {
+        loadCustomerForEdit();
+      }
+    }
+
+    async function loadCustomerForEdit() {
+      const id = document.getElementById("customer-select").value;
+      if (!id) return;
+      const res = await fetch(`/api/customers/${id}`);
+      if (!res.ok) { showToast("Could not load customer.", true); return; }
+      const c = await res.json();
+      document.getElementById("ec-name").value    = c.name    || "";
+      document.getElementById("ec-email").value   = c.email   || "";
+      document.getElementById("ec-phone").value   = c.phone   || "";
+      document.getElementById("ec-address").value = c.address || "";
+      document.getElementById("edit-customer-form").style.display = "block";
+      document.getElementById("edit-customer-btn").textContent = "Cancel Edit";
+    }
+
+    async function saveEditCustomer() {
+      const id   = document.getElementById("customer-select").value;
+      const name = document.getElementById("ec-name").value.trim();
+      if (!name) { showToast("Customer name is required.", true); return; }
+
+      const res = await fetch(`/api/customers/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          email:   document.getElementById("ec-email").value.trim(),
+          phone:   document.getElementById("ec-phone").value.trim(),
+          address: document.getElementById("ec-address").value.trim(),
+        })
+      });
+
+      if (res.ok) {
+        showToast("Customer updated.");
+        // Refresh dropdown so the updated name appears immediately
+        await loadCustomers();
+        document.getElementById("customer-select").value = id;
+        document.getElementById("edit-customer-form").style.display = "none";
+        document.getElementById("edit-customer-btn").textContent = "Edit";
+      } else {
+        const err = await res.json();
+        showToast(err.error || "Update failed.", true);
+      }
+    }
+
+    // -------------------------------------------------------
     // 3. LINE ITEM MANAGEMENT
     // Each line item is a div row with four inputs + a remove
     // button. Any change to quantity or price triggers
@@ -662,15 +786,16 @@
 
     // -------------------------------------------------------
     // 4. SAVE ESTIMATE
-    // Gathers all form values, validates the minimum required
-    // fields, then POSTs to Flask as JSON. On success, reloads
-    // the page so the new estimate appears in the list.
+    // If an estimate is already loaded (estimate-id is set),
+    // PATCH to update it in place — number stays the same.
+    // If no ID, POST to create a new one.
     // -------------------------------------------------------
 
     async function saveEstimate() {
       const customerId = document.getElementById("customer-select").value;
-      
-      if (!customerId)     { showToast("Please select a customer.", true); return; }
+      const estimateId = document.getElementById("estimate-id").value;
+
+      if (!customerId) { showToast("Please select a customer.", true); return; }
 
       const lineItems = [];
       document.querySelectorAll(".line-item-row").forEach(row => {
@@ -694,14 +819,18 @@
         line_items:         lineItems
       };
 
-      const res = await fetch("/api/estimates", {
-        method: "POST",
+      const isUpdate = !!estimateId;
+      const url      = isUpdate ? `/api/estimates/${estimateId}` : "/api/estimates";
+      const method   = isUpdate ? "PATCH" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
 
       if (res.ok) {
-        showToast("Estimate saved!");
+        showToast(isUpdate ? "Estimate updated!" : "Estimate saved!");
         setTimeout(() => location.reload(), 800);
       } else {
         const err = await res.json();
@@ -727,6 +856,7 @@
       document.getElementById("estimate-status").value        = est.status;
       document.getElementById("estimate-notes").value         = est.notes || "";
       document.getElementById("customer-select").value        = est.customer_id;
+      document.getElementById("edit-customer-btn").classList.remove("hidden");
       currentEstimateId = est.id;
       document.getElementById('printEstimateBtn').style.display = 'inline-block';
 
@@ -760,6 +890,8 @@
       document.getElementById("customer-select").value   = "";
       document.getElementById("estimate-status").value   = "draft";
       document.getElementById("convert-btn").classList.add("hidden");
+      document.getElementById("edit-customer-btn").classList.add("hidden");
+      document.getElementById("edit-customer-form").style.display = "none";
       document.getElementById("line-items-container").innerHTML = "";
       addLineItem();
       recalcTotals();
