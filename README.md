@@ -33,7 +33,7 @@ That's it. No database server, no Docker, no cloud account.
 
 **1. Clone the repo**
 ```bash
-git clone https://github.com/your-username/eba-c.git
+git clone https://github.com/EastBeachesCoins/eba-c.git
 cd eba-c
 ```
 
