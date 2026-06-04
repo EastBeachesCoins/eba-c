@@ -51,6 +51,7 @@ from a prior attempt in a separate folder.
 eba-c/
 ├── venv/                   # Python virtual environment (not committed to git)
 ├── templates/
+│   ├── dashboard.html      # Dashboard page
 │   ├── index.html          # Estimates page: list + form
 │   ├── invoices.html       # Invoices page: list + form
 │   ├── expenses.html       # Expenses page: list + form
@@ -77,123 +78,11 @@ python app.py
 
 ---
 
-## Database Schema — Phase 1
+## Database Schema
 
-### `customers`
-Reusable customer records. Created once, linked to many estimates over time.
-
-| Column     | Type    | Notes                        |
-|------------|---------|------------------------------|
-| id         | INTEGER | Primary key, auto-increment  |
-| name       | TEXT    | Required                     |
-| email      | TEXT    |                              |
-| phone      | TEXT    |                              |
-| address    | TEXT    |                              |
-| created_at | TEXT    | Auto-set to datetime('now')  |
-
-### `estimates`
-One row per estimate.
-
-| Column             | Type    | Notes                                          |
-|--------------------|---------|------------------------------------------------|
-| id                 | INTEGER | Primary key, auto-increment                    |
-| customer_id        | INTEGER | Foreign key → customers.id                     |
-| estimate_number    | TEXT    | Internal reference, unique (e.g. EST-001)      |
-| customer_reference | TEXT    | Their PO / WO / address                        |
-| status             | TEXT    | draft / sent / accepted / declined             |
-| notes              | TEXT    |                                                |
-| created_at         | TEXT    | Auto-set                                       |
-| updated_at         | TEXT    | Auto-set (not yet wired to update on save)     |
-
-### `estimate_line_items`
-Each line on an estimate. Totals are calculated dynamically, never stored.
-
-| Column      | Type    | Notes                                      |
-|-------------|---------|--------------------------------------------|
-| id          | INTEGER | Primary key, auto-increment                |
-| estimate_id | INTEGER | Foreign key → estimates.id (CASCADE delete)|
-| description | TEXT    | Required                                   |
-| quantity    | REAL    |                                            |
-| unit_price  | REAL    |                                            |
-| taxable     | INTEGER | 0 = no GST, 1 = apply GST (5%)             |
-
-**GST rate (5%) lives in index.html as `const GST_RATE = 0.05` — update there if needed.**
-
----
-
-## Database Schema — Phase 2
-
-### `invoices`
-One row per invoice. Optionally linked back to a source estimate.
-
-| Column             | Type    | Notes                                          |
-|--------------------|---------|------------------------------------------------|
-| id                 | INTEGER | Primary key, auto-increment                    |
-| customer_id        | INTEGER | Foreign key → customers.id                     |
-| estimate_id        | INTEGER | Nullable FK → estimates.id (null if scratch)   |
-| invoice_number     | TEXT    | Auto-generated (e.g. INV-001), unique          |
-| customer_reference | TEXT    | Their PO / WO / address                        |
-| status             | TEXT    | draft / sent / partial / paid / overdue        |
-| notes              | TEXT    |                                                |
-| issued_date        | TEXT    |                                                |
-| due_date           | TEXT    | Defaults to +30 days from issued in UI         |
-| created_at         | TEXT    | Auto-set                                       |
-| updated_at         | TEXT    | Auto-set (not yet wired to update on save)     |
-
-### `invoice_line_items`
-Independent copy of line items — not linked to estimate_line_items.
-
-| Column      | Type    | Notes                                       |
-|-------------|---------|---------------------------------------------|
-| id          | INTEGER | Primary key, auto-increment                 |
-| invoice_id  | INTEGER | Foreign key → invoices.id (CASCADE delete)  |
-| description | TEXT    | Required                                    |
-| quantity    | REAL    |                                             |
-| unit_price  | REAL    |                                             |
-| taxable     | INTEGER | 0 = no GST, 1 = apply GST (5%)              |
-
-### Database Schema — Phase 3
-payments
-One row per payment received. A single invoice can have multiple payment rows
-(partial payments). Balance owing is calculated at query time, never stored.
-
-Column        / Type    / Notes
--------------------------------------------------------------------------
-id            / INTEGER / Primary key, auto-increment
-invoice_id    / INTEGER / Foreign key → invoices.id (CASCADE delete)
-amount        / REAL    / Required
-payment_date  / TEXT    / Required
-method        / TEXT    / e-transfer / cheque / cash / credit card / bitcoin
-notes         / TEXT    / Optional — post-dated, deposit, etc.
-created_at    / TEXT    / Auto-set
-
-### `vendors`
-Reusable vendor records. Created once, referenced by expenses.
-
-| Column     | Type    | Notes                        |
-|------------|---------|------------------------------|
-| id         | INTEGER | Primary key, auto-increment  |
-| name       | TEXT    | Required                     |
-| phone      | TEXT    |                              |
-| email      | TEXT    |                              |
-| notes      | TEXT    |                              |
-| created_at | TEXT    | Auto-set to datetime('now')  |
-
-### `expenses`
-One row per expense. Cash-basis: recorded when money leaves.
-
-| Column       | Type    | Notes                                           |
-|--------------|---------|-------------------------------------------------|
-| id           | INTEGER | Primary key, auto-increment                     |
-| vendor_id    | INTEGER | Nullable FK → vendors.id                        |
-| invoice_id   | INTEGER | Nullable FK → invoices.id (future job costing)  |
-| estimate_id  | INTEGER | Nullable FK → estimates.id (future job costing) |
-| category     | TEXT    | Defaults to 'cogs' — full picker in later sprint|
-| description  | TEXT    | Optional                                        |
-| amount       | REAL    | Required                                        |
-| gst_paid     | REAL    | Nullable — entered manually, no rate logic yet  |
-| expense_date | TEXT    | Required                                        |
-| created_at   | TEXT    | Auto-set                                        |
+Schema is maintained in `create_db.py` — that file is the source of truth.
+Each table has inline comments explaining the design decisions.
+The phased design notes below cover the *why* behind each phase's approach.
 
 ---
 
@@ -205,7 +94,8 @@ One row per expense. Cash-basis: recorded when money leaves.
 | 2     | Invoices (convert from estimates)  | ✅ Complete |
 | 3     | Payments incl. partial payments    | ✅ Complete |
 | 4     | Expenses / COGS                    | ✅ Complete |
-| 5     | Dashboard (gross profit, due, etc) | Planned     |
+| 5     | Print estimates, invoices, receipts| ✅ Complete |
+| 6     | Dashboard (gross profit, due, etc) | ✅ Complete |
 
 ### Phase 2 Design Note
 Invoices have their own tables (`invoices`, `invoice_line_items`) with an
@@ -253,16 +143,39 @@ owing can be shown correctly.
 Cloud link sharing (generate a shareable URL for customers) is deferred to a
 future sprint. The sent_at column is forward-compatible with that feature.
 
+### Phase 6 Design Note
+The dashboard is a pure read layer — no new writes, no schema changes except
+the jobs stub. All financial totals are calculated from source records at
+query time, consistent with the no-stored-totals principle throughout.
+
+Cash basis is used throughout: Collected (payments) and Disbursed (expenses).
+The data model already supports an accrual view (Invoiced − Expenses) as a
+future toggle — it's a different SQL query against the same tables, not a
+schema change.
+
+The jobs table is stubbed with FK relationships only. Column additions
+(revenue, COGS, GP per job, line items) are deferred to a dedicated
+job-costing sprint. FKs are established now because retrofitting
+relationships later requires migrations; adding columns does not.
+
 ---
 
 ## V0 Cleanup Backlog
 Items deferred from active sprints. To be addressed in a dedicated cleanup
-session after the dashboard sprint.
+sprint. Ranked by ease + importance:
 
-- **Filter accepted estimates from the estimates list.** Once an estimate is
-  converted to an invoice, it crowds the active list. Need a way to hide
-  accepted estimates by default with an option to recall them if needed.
-- Add 'edit customers' function to update customer info
+1. **Header/nav alignment** — Dashboard and expenses headers sit left,
+   estimates and invoices sit right. One CSS fix, all pages.
+2. **Filter accepted estimates from estimates list** — Hide accepted/converted
+   estimates by default, toggle to show. WHERE clause change + UI button.
+3. **Filter draft invoices from invoices list** — Same pattern as above.
+   Bundle with #2, identical logic.
+4. **CSS consistency** — expenses.html uses different variable/class naming
+   than the other three pages. Not broken, just two dialects in one codebase.
+5. **Edit customers** — Inline form or modal, one new PUT route. Useful
+   before go-live.
+6. **Import Wave data** — One-time migration script from Wave CSVs. Defer
+   to its own sprint immediately before go-live.
 
 ---
 
@@ -273,6 +186,10 @@ Items deferred to later version (v1,v2,etc) to keep v0 mission-focused
 - Accounts Payable: To support that properly later you'd want something like a bills table (the obligation) and a bill_payments table (the cash out) — same pattern as invoices/payments but on the expense side. The current expenses table is cash-only by nature.
 - Expense line items: We'll need a migration from 
 - Right before going live: grab Wave CSVs to secure historical data and see if we can port it to our new app without too much yak shaving. Otherwise archive and start with fresh data.
+- email link for estimates, invoices, receipts: A dead-simple "public facing" micro-server — a tiny separate Flask app you deploy once to something like Railway or Fly.io that just serves read-only estimate/invoice HTML. Your local app pushes the rendered HTML to it via an API call.
+- See v0005 chat in Claude for context on these decisions.
+- Job costing: built off the stub jobs table we created in our schema
+- create one-push encrypted cloud storage as data backup
 
 ## Key Design Decisions (and Why)
 
@@ -304,6 +221,33 @@ significant complexity with no benefit at this stage.
 ---
 
 ## Changelog
+
+### v006 — 2026-06-04
+
+Phase 6 complete — Dashboard
+
+- `jobs` table stubbed in `create_db.py` (schema + FKs only, no UI)
+  Columns: id, customer_id, estimate_id, invoice_id, name, status, notes, created_at
+- `/` route reassigned to dashboard; estimates moved to `/estimates`
+- `dashboard.html` added — industrial dark aesthetic, Chart.js (CDN) for chart
+- Nav updated on all pages to include Dashboard link
+
+Dashboard sections:
+  Financial Snapshot — Invoiced / Collected / Expenses / Gross Profit cards
+  with This Month / This Quarter / YTD toggle (JS, no server round-trip)
+  Needs Attention — open estimates + outstanding invoices (clickable rows),
+  recent payments feed (last 10)
+  12-Month Overview — rolling bar+line chart; collected and expenses as bars,
+  gross profit as amber line overlay
+
+Flask routes added:
+  GET / — renders dashboard.html with all data pre-baked (no separate API calls)
+
+Data notes:
+  All financial totals calculated from source records — never stored
+  Cash basis throughout: collected in, disbursed out
+  Invoice grand totals calculated inline from invoice_line_items in SQL
+  Draft invoices excluded from outstanding panel by design
 
 ### v005 — 2026-06-02
 

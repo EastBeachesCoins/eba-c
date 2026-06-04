@@ -30,15 +30,129 @@ def get_db():
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
-
 # =============================================================================
-# ROUTE: Home
+# ROUTE: Dashboard — GET
 # -----------------------------------------------------------------------------
-# The root URL '/'. Fetches all existing estimates (with customer name joined
-# in) and passes them to the template for display in the estimates list.
+# New root route. Fetches all data needed for the three dashboard sections:
+#   1. Operational: open estimates, unpaid invoices, recent payments
+#   2. Snapshot cards: invoiced / collected / expenses / GP by period
+#   3. Chart: 12-month rolling income + expenses by month
+#
+# All totals are calculated in SQL — same principle as everywhere else.
+# Grand totals on invoices are computed from line items on the fly.
 # =============================================================================
 
 @app.route("/")
+def dashboard():
+    conn = get_db()
+
+    # --- Open estimates (draft or sent — not accepted/declined) ---
+    open_estimates = conn.execute("""
+        SELECT e.id, e.estimate_number, e.customer_reference, e.status,
+               e.created_at, c.name AS customer_name
+        FROM estimates e
+        JOIN customers c ON e.customer_id = c.id
+        WHERE e.status IN ('draft', 'sent')
+        ORDER BY e.created_at DESC
+    """).fetchall()
+
+    # --- Unpaid invoices with balance owing ---
+    # Grand total is calculated from line items. Balance = grand total - paid.
+    # 'partial' and 'sent' and 'overdue' all count as unpaid.
+    unpaid_invoices = conn.execute("""
+        SELECT
+            i.id,
+            i.invoice_number,
+            i.customer_reference,
+            i.status,
+            i.due_date,
+            c.name AS customer_name,
+            -- Grand total from line items (subtotal + 5% GST on taxable lines)
+            SUM(li.quantity * li.unit_price * (1 + 0.05 * li.taxable)) AS grand_total,
+            -- Total collected so far
+            COALESCE((
+                SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id = i.id
+            ), 0) AS total_paid
+        FROM invoices i
+        JOIN customers c ON i.customer_id = c.id
+        JOIN invoice_line_items li ON li.invoice_id = i.id
+        WHERE i.status IN ('sent', 'partial', 'overdue')
+        GROUP BY i.id
+        ORDER BY i.due_date ASC
+    """).fetchall()
+
+    # --- Recent payments (last 10) ---
+    recent_payments = conn.execute("""
+        SELECT
+            p.id,
+            p.amount,
+            p.payment_date,
+            p.method,
+            i.invoice_number,
+            i.id AS invoice_id,
+            c.name AS customer_name
+        FROM payments p
+        JOIN invoices i ON p.invoice_id = i.id
+        JOIN customers c ON i.customer_id = c.id
+        ORDER BY p.payment_date DESC, p.created_at DESC
+        LIMIT 10
+    """).fetchall()
+
+    # --- 12-month rolling data for snapshot cards and chart ---
+    # strftime('%Y-%m', ...) groups by year-month string (e.g. '2026-05').
+    # We pull all 12 months and let the frontend handle period filtering
+    # for the This Month / This Quarter / YTD toggle.
+
+    monthly_invoiced = conn.execute("""
+        SELECT
+            strftime('%Y-%m', i.issued_date) AS month,
+            SUM(li.quantity * li.unit_price * (1 + 0.05 * li.taxable)) AS total
+        FROM invoices i
+        JOIN invoice_line_items li ON li.invoice_id = i.id
+        WHERE i.issued_date >= date('now', '-12 months')
+        GROUP BY month
+        ORDER BY month ASC
+    """).fetchall()
+
+    monthly_collected = conn.execute("""
+        SELECT
+            strftime('%Y-%m', payment_date) AS month,
+            SUM(amount) AS total
+        FROM payments
+        WHERE payment_date >= date('now', '-12 months')
+        GROUP BY month
+        ORDER BY month ASC
+    """).fetchall()
+
+    monthly_expenses = conn.execute("""
+        SELECT
+            strftime('%Y-%m', expense_date) AS month,
+            SUM(amount) AS total
+        FROM expenses
+        WHERE expense_date >= date('now', '-12 months')
+        GROUP BY month
+        ORDER BY month ASC
+    """).fetchall()
+
+    conn.close()
+
+    return render_template("dashboard.html",
+        open_estimates   = [dict(r) for r in open_estimates],
+        unpaid_invoices  = [dict(r) for r in unpaid_invoices],
+        recent_payments  = [dict(r) for r in recent_payments],
+        monthly_invoiced = [dict(r) for r in monthly_invoiced],
+        monthly_collected= [dict(r) for r in monthly_collected],
+        monthly_expenses = [dict(r) for r in monthly_expenses],
+    )
+
+# =============================================================================
+# ROUTE: Estimates
+# -----------------------------------------------------------------------------
+# Fetches all existing estimates (with customer name joined
+# in) and passes them to the template for display in the estimates list.
+# =============================================================================
+
+@app.route("/estimates")
 def index():
     conn = get_db()
     estimates = conn.execute("""

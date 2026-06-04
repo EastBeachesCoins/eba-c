@@ -74,6 +74,7 @@
  
     .nav-links a:hover  { color: var(--text); }
     .nav-links a.active { color: var(--accent); }
+    .nav-links a.dashboard { color: var(--accent); }
  
     main {
       max-width: 1100px;
@@ -389,13 +390,14 @@
     on the current page. Will be consolidated when dashboard is built.
   ============================================================== -->
   <header>
-    <h1>EB_ACCOUNTING</h1>
-    <nav class="nav-links">
-      <a href="/">Estimates</a>
-      <a href="/invoices" class="active">Invoices</a>
-      <a href="/expenses">Expenses</a>
-    </nav>
-  </header>
+  <h1>EB_ACCOUNTING</h1>
+  <nav class="nav-links">
+    <a href="/">Dashboard</a>
+    <a href="/estimates">Estimates</a>
+    <a href="/invoices" class="active">Invoices</a>
+    <a href="/expenses">Expenses</a>
+  </nav>
+</header>
  
   <main>
  

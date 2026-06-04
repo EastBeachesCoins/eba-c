@@ -215,6 +215,33 @@ CREATE TABLE IF NOT EXISTS expenses (
 );
 """
 
+# =============================================================================
+# TABLE: jobs
+# -----------------------------------------------------------------------------
+# Stub table for future job costing. No UI yet — schema only.
+#
+# The important thing here is the FK relationships: customer_id links a job
+# to who it's for. estimate_id and invoice_id are nullable — a job might
+# exist before an estimate is created, or span multiple invoices eventually.
+#
+# Revenue, COGS, and gross profit per job are future columns — we'll add them
+# when we build the job costing UI. For now, the relationships are what matter.
+# =============================================================================
+
+CREATE_JOBS = """
+CREATE TABLE IF NOT EXISTS jobs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL REFERENCES customers(id),
+    estimate_id INTEGER REFERENCES estimates(id),
+    invoice_id  INTEGER REFERENCES invoices(id),
+    name        TEXT    NOT NULL,
+    status      TEXT    NOT NULL DEFAULT 'active',
+    notes       TEXT,
+    created_at  TEXT    DEFAULT (datetime('now'))
+);
+"""
+# Status values (enforced in UI when we get there): active | complete | cancelled
+
 
 # =============================================================================
 # MAIN — CREATE ALL TABLES
@@ -254,6 +281,9 @@ if __name__ == "__main__":
 
     cursor.execute(CREATE_EXPENSES)
     print("✓ Table 'expenses' ready")
+
+    cursor.execute(CREATE_JOBS)
+    print("✓ Table 'jobs' ready")
 
 
     conn.commit()

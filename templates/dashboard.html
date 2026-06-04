@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EBAccounting — Dashboard</title>
+
+  <!-- Chart.js from CDN — used for the 12-month bar+line chart only -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+  <style>
+    /* ==========================================================================
+       DESIGN TOKENS
+       Matches the industrial dark aesthetic used across the app.
+       Amber accent, IBM Plex Mono/Sans, dark backgrounds.
+    ========================================================================== */
+    :root {
+      --bg:           #0f0f0f;
+      --bg-card:      #1a1a1a;
+      --bg-row:       #1f1f1f;
+      --bg-row-hover: #252525;
+      --border:       #2e2e2e;
+      --border-light: #3a3a3a;
+      --amber:        #f5a623;
+      --amber-dim:    #a36d12;
+      --text:         #e8e8e8;
+      --text-dim:     #888;
+      --text-muted:   #555;
+      --green:        #4caf7d;
+      --red:          #e05c5c;
+      --blue:         #5b9bd5;
+      --font-mono:    'IBM Plex Mono', monospace;
+      --font-sans:    'IBM Plex Sans', sans-serif;
+    }
+
+    /* ==========================================================================
+       RESET + BASE
+    ========================================================================== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ==========================================================================
+       GOOGLE FONTS
+    ========================================================================== */
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+    /* ==========================================================================
+       NAV
+       Matches existing pages — amber logo, monospace, dark strip.
+    ========================================================================== */
+    nav {
+      background: #111;
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      height: 52px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .nav-logo {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--amber);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-right: 8px;
+    }
+
+    nav a {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 4px 0;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    nav a:hover { color: var(--text); }
+    nav a.active { color: var(--amber); border-bottom-color: var(--amber); }
+
+    /* ==========================================================================
+       PAGE LAYOUT
+    ========================================================================== */
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 36px 32px 64px;
+    }
+
+    .page-header {
+      margin-bottom: 36px;
+    }
+
+    .page-header h1 {
+      font-family: var(--font-mono);
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--amber);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .page-header p {
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+
+    /* ==========================================================================
+       SECTION
+       Each dashboard section has a labelled header + optional explainer.
+    ========================================================================== */
+    .section {
+      margin-bottom: 48px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-header h2 {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--amber);
+    }
+
+    .section-header p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* ==========================================================================
+       SNAPSHOT CARDS
+       Four numbers: Invoiced / Collected / Expenses / Gross Profit
+       with a This Month / This Quarter / YTD toggle.
+    ========================================================================== */
+    .period-toggle {
+      display: flex;
+      gap: 0;
+      margin-bottom: 20px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      width: fit-content;
+      overflow: hidden;
+    }
+
+    .period-btn {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 7px 16px;
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      border-right: 1px solid var(--border);
+    }
+
+    .period-btn:last-child { border-right: none; }
+
+    .period-btn:hover { background: var(--bg-row); color: var(--text); }
+
+    .period-btn.active {
+      background: var(--amber);
+      color: #000;
+      font-weight: 600;
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 20px 22px;
+    }
+
+    .card-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .card-value {
+      font-family: var(--font-mono);
+      font-size: 26px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+
+    .card-value.positive { color: var(--green); }
+    .card-value.negative { color: var(--red); }
+    .card-value.amber    { color: var(--amber); }
+
+    .card-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* ==========================================================================
+       OPERATIONAL TABLES
+       Open estimates / unpaid invoices / recent payments
+    ========================================================================== */
+    .op-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .op-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .op-panel-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .op-panel-header span {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    .op-panel-header .count {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .op-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .op-table tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+
+    .op-table tr:last-child { border-bottom: none; }
+
+    .op-table tr.clickable { cursor: pointer; }
+    .op-table tr.clickable:hover { background: var(--bg-row-hover); }
+
+    .op-table td {
+      padding: 10px 16px;
+      font-size: 13px;
+      vertical-align: middle;
+    }
+
+    .op-table .mono {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--amber);
+    }
+
+    .op-table .customer { color: var(--text); }
+    .op-table .ref      { color: var(--text-dim); font-size: 12px; }
+    .op-table .amount   { font-family: var(--font-mono); font-size: 13px; text-align: right; }
+    .op-table .due      { font-size: 12px; color: var(--text-dim); text-align: right; }
+    .op-table .due.overdue { color: var(--red); }
+
+    .empty-row td {
+      padding: 20px 16px;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-style: italic;
+      text-align: center;
+    }
+
+    /* ==========================================================================
+       STATUS BADGES
+       Matches the existing badge style from other pages.
+    ========================================================================== */
+    .badge {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+
+    .badge-draft   { background: #2a2a2a; color: var(--text-dim); border: 1px solid #3a3a3a; }
+    .badge-sent    { background: #1a2d3d; color: var(--blue);     border: 1px solid #2a4a63; }
+    .badge-partial { background: #2d2200; color: var(--amber);    border: 1px solid #5a4000; }
+    .badge-overdue { background: #2d1010; color: var(--red);      border: 1px solid #5a2020; }
+    .badge-paid    { background: #0f2d1f; color: var(--green);    border: 1px solid #1a5a3a; }
+
+    /* ==========================================================================
+       RECENT PAYMENTS — full-width panel
+    ========================================================================== */
+    .payments-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    /* ==========================================================================
+       CHART
+       12-month rolling bar+line. Canvas constrained to a fixed height.
+    ========================================================================== */
+    .chart-wrap {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 24px;
+    }
+
+    .chart-legend {
+      display: flex;
+      gap: 24px;
+      margin-bottom: 20px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .legend-line {
+      width: 18px;
+      height: 2px;
+      border-radius: 1px;
+      flex-shrink: 0;
+    }
+
+    canvas#profitChart {
+      max-height: 280px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ========================================================================
+       NAV
+  ========================================================================= -->
+  <nav>
+    <span class="nav-logo">EBA</span>
+    <a href="/" class="active">Dashboard</a>
+    <a href="/estimates">Estimates</a>
+    <a href="/invoices">Invoices</a>
+    <a href="/expenses">Expenses</a>
+  </nav>
+
+  <div class="page">
+
+    <div class="page-header">
+      <h1>Dashboard</h1>
+      <p>Business overview — operational status and financial snapshot.</p>
+    </div>
+
+    <!-- ======================================================================
+         SECTION 1: FINANCIAL SNAPSHOT
+         Four cards: Invoiced / Collected / Expenses / Gross Profit
+         Toggle filters between This Month, This Quarter, YTD.
+         All math happens in JS from the data Flask passed in.
+    ======================================================================= -->
+    <div class="section">
+      <div class="section-header">
+        <h2>Financial Snapshot</h2>
+        <p>Invoiced, collected, spent, and gross profit for the selected period.</p>
+      </div>
+
+      <div class="period-toggle">
+        <button class="period-btn active" onclick="setPeriod('month')">This Month</button>
+        <button class="period-btn" onclick="setPeriod('quarter')">This Quarter</button>
+        <button class="period-btn" onclick="setPeriod('ytd')">YTD</button>
+      </div>
+
+      <div class="cards-grid">
+        <div class="card">
+          <div class="card-label">Invoiced</div>
+          <div class="card-value amber" id="card-invoiced">—</div>
+          <div class="card-sub">Total billed to customers</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Collected</div>
+          <div class="card-value positive" id="card-collected">—</div>
+          <div class="card-sub">Cash received</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Expenses</div>
+          <div class="card-value negative" id="card-expenses">—</div>
+          <div class="card-sub">Cash disbursed</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Gross Profit</div>
+          <div class="card-value" id="card-gp">—</div>
+          <div class="card-sub">Collected − Expenses</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================================
+         SECTION 2: OPERATIONAL
+         Left: open estimates. Right: unpaid invoices with balance owing.
+         Each row is a link to the relevant record.
+    ======================================================================= -->
+    <div class="section">
+      <div class="section-header">
+        <h2>Needs Attention</h2>
+        <p>Open estimates and outstanding invoices. Click any row to open it.</p>
+      </div>
+
+      <div class="op-grid">
+
+        <!-- Open Estimates -->
+        <div class="op-panel">
+          <div class="op-panel-header">
+            <span>Open Estimates</span>
+            <span class="count" id="est-count"></span>
+          </div>
+          <table class="op-table" id="est-table">
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- Unpaid Invoices -->
+        <div class="op-panel">
+          <div class="op-panel-header">
+            <span>Outstanding Invoices</span>
+            <span class="count" id="inv-count"></span>
+          </div>
+          <table class="op-table" id="inv-table">
+            <tbody></tbody>
+          </table>
+        </div>
+
+      </div>
+
+      <!-- Recent Payments — full width -->
+      <div class="payments-panel">
+        <div class="op-panel-header">
+          <span>Recent Payments</span>
+          <span class="count" id="pay-count"></span>
+        </div>
+        <table class="op-table" id="pay-table">
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ======================================================================
+         SECTION 3: 12-MONTH CHART
+         Bars: collected (up) and expenses (down, negative axis).
+         Line: gross profit overlay.
+         Rolling 12 months — always the last year from today.
+    ======================================================================= -->
+    <div class="section">
+      <div class="section-header">
+        <h2>12-Month Overview</h2>
+        <p>Rolling 12 months — income, expenses, and gross profit by month.</p>
+      </div>
+
+      <div class="chart-wrap">
+        <div class="chart-legend">
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#4caf7d"></div>
+            Collected
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#e05c5c"></div>
+            Expenses
+          </div>
+          <div class="legend-item">
+            <div class="legend-line" style="background:#f5a623"></div>
+            Gross Profit
+          </div>
+        </div>
+        <canvas id="profitChart"></canvas>
+      </div>
+    </div>
+
+  </div><!-- /.page -->
+
+
+  <!-- ==========================================================================
+       DATA FROM FLASK
+       Flask passes Python lists as JSON via tojson filter.
+       We read them here and JS does all the display logic.
+  =========================================================================== -->
+  <script>
+    // Raw data injected by Flask — arrays of objects, one per month or record.
+    const RAW_INVOICED   = {{ monthly_invoiced   | tojson }};
+    const RAW_COLLECTED  = {{ monthly_collected  | tojson }};
+    const RAW_EXPENSES   = {{ monthly_expenses   | tojson }};
+    const OPEN_ESTIMATES = {{ open_estimates     | tojson }};
+    const UNPAID_INVOICES= {{ unpaid_invoices    | tojson }};
+    const RECENT_PAYMENTS= {{ recent_payments    | tojson }};
+  </script>
+
+  <script>
+    // ==========================================================================
+    // UTILITIES
+    // ==========================================================================
+
+    const GST_RATE = 0.05; // Keep in sync with index.html
+
+    // Format a number as Canadian dollars, no cents if clean.
+    function fmt(n) {
+      if (n === null || n === undefined || isNaN(n)) return '$0';
+      return '$' + Math.round(n).toLocaleString('en-CA');
+    }
+
+    // Return today's YYYY-MM string and YYYY string for period filtering.
+    function todayParts() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      return { year: String(y), month: `${y}-${m}`, quarter: currentQuarterMonths(d) };
+    }
+
+    // Returns array of YYYY-MM strings for the current calendar quarter.
+    function currentQuarterMonths(d) {
+      const m = d.getMonth(); // 0-indexed
+      const y = d.getFullYear();
+      const qStart = Math.floor(m / 3) * 3; // 0, 3, 6, or 9
+      const months = [];
+      for (let i = 0; i < 3; i++) {
+        const mm = String(qStart + i + 1).padStart(2, '0');
+        months.push(`${y}-${mm}`);
+      }
+      return months;
+    }
+
+    // Sum a monthly data array for months matching a filter function.
+    function sumMonths(arr, filterFn) {
+      return arr
+        .filter(r => filterFn(r.month))
+        .reduce((acc, r) => acc + (r.total || 0), 0);
+    }
+
+    // Build a badge span for a status string.
+    function badge(status) {
+      const cls = {
+        draft: 'badge-draft', sent: 'badge-sent', partial: 'badge-partial',
+        overdue: 'badge-overdue', paid: 'badge-paid', accepted: 'badge-paid'
+      }[status] || 'badge-draft';
+      return `<span class="badge ${cls}">${status}</span>`;
+    }
+
+    // Format a date string (YYYY-MM-DD) as e.g. "Jun 3"
+    function fmtDate(s) {
+      if (!s) return '—';
+      const d = new Date(s + 'T00:00:00'); // force local parse
+      return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+    }
+
+    // Is a due date in the past?
+    function isOverdue(dateStr) {
+      if (!dateStr) return false;
+      return new Date(dateStr + 'T00:00:00') < new Date();
+    }
+
+    // ==========================================================================
+    // SNAPSHOT CARDS
+    // ==========================================================================
+
+    let currentPeriod = 'month';
+
+    function setPeriod(period) {
+      currentPeriod = period;
+
+      // Update button states
+      document.querySelectorAll('.period-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+
+      renderCards();
+    }
+
+    function renderCards() {
+      const { year, month, quarter } = todayParts();
+
+      let filterFn;
+      if (currentPeriod === 'month') {
+        filterFn = m => m === month;
+      } else if (currentPeriod === 'quarter') {
+        filterFn = m => quarter.includes(m);
+      } else { // ytd
+        filterFn = m => m && m.startsWith(year);
+      }
+
+      const invoiced  = sumMonths(RAW_INVOICED,  filterFn);
+      const collected = sumMonths(RAW_COLLECTED, filterFn);
+      const expenses  = sumMonths(RAW_EXPENSES,  filterFn);
+      const gp        = collected - expenses;
+
+      document.getElementById('card-invoiced').textContent   = fmt(invoiced);
+      document.getElementById('card-collected').textContent  = fmt(collected);
+      document.getElementById('card-expenses').textContent   = fmt(expenses);
+
+      const gpEl = document.getElementById('card-gp');
+      gpEl.textContent = fmt(gp);
+      gpEl.className   = 'card-value ' + (gp >= 0 ? 'positive' : 'negative');
+    }
+
+    // ==========================================================================
+    // OPERATIONAL TABLES
+    // ==========================================================================
+
+    function renderEstimates() {
+      const tbody = document.querySelector('#est-table tbody');
+      document.getElementById('est-count').textContent =
+        OPEN_ESTIMATES.length ? `${OPEN_ESTIMATES.length} open` : '';
+
+      if (!OPEN_ESTIMATES.length) {
+        tbody.innerHTML = '<tr class="empty-row"><td>No open estimates.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = OPEN_ESTIMATES.map(e => `
+        <tr class="clickable" onclick="window.location='/estimates#${e.id}'">
+          <td><span class="mono">${e.estimate_number}</span></td>
+          <td>
+            <div class="customer">${e.customer_name}</div>
+            <div class="ref">${e.customer_reference || '—'}</div>
+          </td>
+          <td style="text-align:right">${badge(e.status)}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderInvoices() {
+      const tbody = document.querySelector('#inv-table tbody');
+      document.getElementById('inv-count').textContent =
+        UNPAID_INVOICES.length ? `${UNPAID_INVOICES.length} outstanding` : '';
+
+      if (!UNPAID_INVOICES.length) {
+        tbody.innerHTML = '<tr class="empty-row"><td>No outstanding invoices.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = UNPAID_INVOICES.map(i => {
+        const balance = (i.grand_total || 0) - (i.total_paid || 0);
+        const due = i.due_date;
+        const dueCls = isOverdue(due) ? 'due overdue' : 'due';
+        return `
+          <tr class="clickable" onclick="window.location='/invoices#${i.id}'">
+            <td><span class="mono">${i.invoice_number}</span></td>
+            <td>
+              <div class="customer">${i.customer_name}</div>
+              <div class="ref">${i.customer_reference || '—'}</div>
+            </td>
+            <td>
+              <div class="amount">${fmt(balance)}</div>
+              <div class="${dueCls}">due ${fmtDate(due)}</div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderPayments() {
+      const tbody = document.querySelector('#pay-table tbody');
+      document.getElementById('pay-count').textContent =
+        RECENT_PAYMENTS.length ? `last ${RECENT_PAYMENTS.length}` : '';
+
+      if (!RECENT_PAYMENTS.length) {
+        tbody.innerHTML = '<tr class="empty-row"><td>No payments recorded yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = RECENT_PAYMENTS.map(p => `
+        <tr class="clickable" onclick="window.location='/invoices#${p.invoice_id}'">
+          <td style="width:110px"><span class="mono">${fmtDate(p.payment_date)}</span></td>
+          <td><span class="mono" style="color:var(--text-dim)">${p.invoice_number}</span></td>
+          <td>${p.customer_name}</td>
+          <td style="color:var(--text-dim);font-size:12px">${p.method || '—'}</td>
+          <td class="amount" style="color:var(--green)">${fmt(p.amount)}</td>
+        </tr>
+      `).join('');
+    }
+
+    // ==========================================================================
+    // 12-MONTH CHART
+    // Build a complete 12-month label array so months with $0 still show up.
+    // ==========================================================================
+
+    function buildChartData() {
+      // Generate last 12 months as YYYY-MM strings, oldest first
+      const months = [];
+      const labels = [];
+      const now = new Date();
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const label = d.toLocaleDateString('en-CA', { month: 'short', year: '2-digit' });
+        months.push(key);
+        labels.push(label);
+      }
+
+      // Convert arrays to lookup maps for fast access
+      const collectedMap = Object.fromEntries(RAW_COLLECTED.map(r => [r.month, r.total]));
+      const expensesMap  = Object.fromEntries(RAW_EXPENSES.map(r => [r.month, r.total]));
+
+      const collectedData = months.map(m => collectedMap[m] || 0);
+      const expensesData  = months.map(m => expensesMap[m]  || 0);
+      const profitData    = months.map((m, i) => collectedData[i] - expensesData[i]);
+
+      return { labels, collectedData, expensesData, profitData };
+    }
+
+    function renderChart() {
+      const { labels, collectedData, expensesData, profitData } = buildChartData();
+
+      const ctx = document.getElementById('profitChart').getContext('2d');
+
+      new Chart(ctx, {
+        // Mixed chart: bars for collected/expenses, line for profit
+        data: {
+          labels,
+          datasets: [
+            {
+              type: 'bar',
+              label: 'Collected',
+              data: collectedData,
+              backgroundColor: 'rgba(76, 175, 125, 0.7)',
+              borderColor:     'rgba(76, 175, 125, 1)',
+              borderWidth: 1,
+              borderRadius: 2,
+              order: 2,
+            },
+            {
+              type: 'bar',
+              label: 'Expenses',
+              data: expensesData,
+              backgroundColor: 'rgba(224, 92, 92, 0.7)',
+              borderColor:     'rgba(224, 92, 92, 1)',
+              borderWidth: 1,
+              borderRadius: 2,
+              order: 2,
+            },
+            {
+              type: 'line',
+              label: 'Gross Profit',
+              data: profitData,
+              borderColor:     '#f5a623',
+              backgroundColor: 'rgba(245, 166, 35, 0.08)',
+              borderWidth: 2,
+              pointBackgroundColor: '#f5a623',
+              pointRadius: 3,
+              pointHoverRadius: 5,
+              fill: true,
+              tension: 0.3,
+              order: 1,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: false }, // We have our own legend above
+            tooltip: {
+              backgroundColor: '#1a1a1a',
+              borderColor: '#2e2e2e',
+              borderWidth: 1,
+              titleColor: '#888',
+              bodyColor: '#e8e8e8',
+              titleFont: { family: "'IBM Plex Mono', monospace", size: 11 },
+              bodyFont:  { family: "'IBM Plex Mono', monospace", size: 12 },
+              callbacks: {
+                label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid:  { color: '#1f1f1f' },
+              ticks: { color: '#555', font: { family: "'IBM Plex Mono', monospace", size: 10 } }
+            },
+            y: {
+              grid:  { color: '#1f1f1f' },
+              ticks: {
+                color: '#555',
+                font: { family: "'IBM Plex Mono', monospace", size: 10 },
+                callback: v => fmt(v)
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // ==========================================================================
+    // INIT — render everything on page load
+    // ==========================================================================
+    renderCards();
+    renderEstimates();
+    renderInvoices();
+    renderPayments();
+    renderChart();
+
+  </script>
+
+</body>
+</html>
