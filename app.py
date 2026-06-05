@@ -429,9 +429,14 @@ def create_invoice():
     conn = get_db()
 
     try:
-        # Auto-generate the next invoice number
-        count = conn.execute("SELECT COUNT(*) FROM invoices").fetchone()[0]
-        invoice_number = f"INV-{str(count + 1).zfill(3)}"
+        max_row = conn.execute(
+            "SELECT invoice_number FROM invoices ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if max_row:
+            last_num = int(max_row[0].replace("INV-", ""))
+            invoice_number = f"INV-{last_num + 1}"
+        else:
+            invoice_number = "INV-001"
 
         cursor = conn.execute("""
             INSERT INTO invoices
@@ -609,9 +614,14 @@ def invoice_from_estimate(estimate_id):
         if not estimate:
             return jsonify({"error": "Estimate not found"}), 404
 
-        # Auto-generate the next invoice number
-        count = conn.execute("SELECT COUNT(*) FROM invoices").fetchone()[0]
-        invoice_number = f"INV-{str(count + 1).zfill(3)}"
+        max_row = conn.execute(
+            "SELECT invoice_number FROM invoices ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if max_row:
+            last_num = int(max_row[0].replace("INV-", ""))
+            invoice_number = f"INV-{last_num + 1}"
+        else:
+            invoice_number = "INV-001"
 
         # Create the invoice, copying fields from the estimate
         cursor = conn.execute("""
@@ -677,7 +687,19 @@ def invoices_page():
         ORDER BY i.created_at DESC
     """).fetchall()
     conn.close()
-    return render_template("invoices.html", invoices=invoices)
+    return render_template("invoices.html", invoices=[dict(i) for i in invoices])
+
+# =============================================================================
+# ROUTE: Delete invoice
+# =============================================================================
+
+@app.route('/api/invoices/<int:invoice_id>', methods=['DELETE'])
+def delete_invoice(invoice_id):
+    conn = get_db()
+    conn.execute('DELETE FROM invoices WHERE id = ?', (invoice_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'deleted': invoice_id})
 
 # =============================================================================
 # PAYMENTS

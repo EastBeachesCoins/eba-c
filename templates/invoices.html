@@ -407,7 +407,10 @@
       Pulled from the database on page load via Flask (Jinja2 loop).
       Clicking a row loads the invoice into the form below.
     ============================================================== -->
-    <div class="section-title">Invoices</div>
+   <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px; padding-bottom:6px; border-bottom:1px solid var(--border);">
+      <span class="section-title" style="margin:0; border:none; padding:0;">Invoices</span>
+      <button class="btn btn-ghost" id="toggle-filter-btn" onclick="toggleFilter()" style="font-size:11px; padding:4px 12px;">Show All</button>
+    </div>
     <div class="card" style="padding: 0; overflow: hidden;">
       <table id="invoices-table">
         <thead>
@@ -420,26 +423,7 @@
             <th>Status</th>
           </tr>
         </thead>
-        <tbody id="invoices-body">
-          {% if invoices %}
-            {% for inv in invoices %}
-            <tr onclick="loadInvoice({{ inv.id }})">
-              <td class="mono">{{ inv.invoice_number }}</td>
-              <td>{{ inv.customer_name }}</td>
-              <td>{{ inv.customer_reference or '—' }}</td>
-              <td class="mono">{{ inv.issued_date or '—' }}</td>
-              <td class="mono">{{ inv.due_date or '—' }}</td>
-              <td><span class="status-badge status-{{ inv.status }}">{{ inv.status }}</span></td>
-            </tr>
-            {% endfor %}
-          {% else %}
-            <tr id="empty-row">
-              <td colspan="6" style="text-align:center; color: var(--muted); padding: 32px;">
-                No invoices yet. Create one below.
-              </td>
-            </tr>
-          {% endif %}
-        </tbody>
+        <tbody id="invoices-body"></tbody>
       </table>
     </div>
  
@@ -599,6 +583,7 @@
         <button class="btn btn-primary" onclick="saveInvoice()">Save Invoice</button>
         <button type="button" onclick="openInvoicePrint()" id="printInvoiceBtn" style="display:none">Print / PDF</button>
         <button type="button" onclick="openReceipt()" id="printReceiptBtn" style="display:none">Receipt</button>
+        <button type="button" onclick="deleteInvoice()" id="deleteInvoiceBtn" style="display:none">Delete</button>
       </div>
  
     </div>
@@ -693,6 +678,7 @@
       loadCustomers();
       addLineItem();
       setDefaultDates();
+      renderInvoiceList();
     });
  
     function setDefaultDates() {
@@ -964,6 +950,7 @@
       document.getElementById("edit-customer-btn").classList.remove("hidden");
       currentInvoiceId = inv.id;
       document.getElementById('printInvoiceBtn').style.display = 'inline-block';
+      document.getElementById('deleteInvoiceBtn').style.display = 'inline-block';
  
       // Show source estimate banner if this invoice came from one
       const banner = document.getElementById("estimate-source-banner");
@@ -993,8 +980,27 @@
         loadPayments(inv.id);
     }
 
+    // -------------------------------------------------------
+    // 5b. DELETE INVOICE
+    // Called when a row in the invoices table is clicked.
+    // Fetches the full invoice from Flask and populates the form.
+    // If estimate_number is present, shows the source banner.
+    // -------------------------------------------------------
+
+    async function deleteInvoice() {
+      if (!currentInvoiceId) return;
+      if (!confirm('Delete this invoice? This cannot be undone.')) return;
+      const res = await fetch(`/api/invoices/${currentInvoiceId}`, { method: 'DELETE' });
+      if (res.ok) {
+        showToast('Invoice deleted.');
+        setTimeout(() => location.reload(), 800);
+      } else {
+        showToast('Could not delete invoice.', true);
+      }
+    }
+
 // -------------------------------------------------------
-// 5b. PAYMENTS
+// 5c. PAYMENTS
 // Payments section is hidden until an invoice is loaded.
 // logPayment() POSTs to /api/invoices/<id>/payments.
 // loadPayments() GETs all payments and recalculates balance.
@@ -1095,6 +1101,7 @@ async function deletePayment(paymentId, invoiceId) {
       document.getElementById("payments-section").classList.add("hidden");
       document.getElementById("edit-customer-btn").classList.add("hidden");
       document.getElementById("edit-customer-form").style.display = "none";
+      document.getElementById('deleteInvoiceBtn').style.display = 'none';
       addLineItem();
       recalcTotals();
       setDefaultDates();
@@ -1111,7 +1118,7 @@ async function deletePayment(paymentId, invoiceId) {
       setTimeout(() => t.className = t.className.replace("show", "").trim(), 2800);
     }
 
-// save invoices and paymnents receipts as PDFs
+// save invoices and payments receipts as PDFs
 function openInvoicePrint() {
     console.log('invoice id:', currentInvoiceId);
     window.open(`/invoices/${currentInvoiceId}/print`, '_blank');
@@ -1119,6 +1126,45 @@ function openInvoicePrint() {
 
 function openReceipt() {
     window.open(`/invoices/${currentInvoiceId}/receipt`, '_blank');
+}
+
+// functions for hiding paid invoices and 'show all' toggle button
+const ALL_INVOICES = {{ invoices | tojson }};
+let showAllInvoices = false;
+
+const HIDDEN_STATUSES = ['paid'];
+
+function renderInvoiceList() {
+  const tbody = document.getElementById('invoices-body');
+  const list = showAllInvoices
+    ? ALL_INVOICES
+    : ALL_INVOICES.filter(i => !HIDDEN_STATUSES.includes(i.status));
+
+  if (list.length === 0) {
+    const msg = showAllInvoices
+      ? 'No invoices yet. Create one below.'
+      : 'No open invoices. Use <strong>Show All</strong> to see paid and draft.';
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--muted); padding:32px;">${msg}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = list.map(inv => `
+    <tr onclick="loadInvoice(${inv.id})">
+      <td class="mono">${inv.invoice_number}</td>
+      <td>${inv.customer_name}</td>
+      <td>${inv.customer_reference || '—'}</td>
+      <td class="mono">${inv.issued_date || '—'}</td>
+      <td class="mono">${inv.due_date || '—'}</td>
+      <td><span class="status-badge status-${inv.status}">${inv.status}</span></td>
+    </tr>
+  `).join('');
+}
+
+function toggleFilter() {
+  showAllInvoices = !showAllInvoices;
+  document.getElementById('toggle-filter-btn').textContent =
+    showAllInvoices ? 'Hide Closed' : 'Show All';
+  renderInvoiceList();
 }
  
   </script>

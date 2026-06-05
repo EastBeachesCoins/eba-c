@@ -1,6 +1,6 @@
 # EBAccounting — Project Documentation
-> Last updated: 2026-06-02
-> Version: v005
+> Last updated: 2026-06-05
+> Version: v008
 
 ---
 
@@ -39,7 +39,7 @@ from a prior attempt in a separate folder.
 - **Prefers:** Understanding *why* things are built a certain way, not just
   copying syntax. Explanations of concepts, not hand-holding on basics.
 - **Communication style:** Direct, honest feedback preferred over reassurance.
-  Humour appreciated. One task at a time.
+  Humor appreciated. One task at a time.
 - **Workflow:** Code is written in Claude, saved in VS Code, pushed to GitHub
   at the end of each sprint.
 
@@ -96,6 +96,8 @@ The phased design notes below cover the *why* behind each phase's approach.
 | 4     | Expenses / COGS                    | ✅ Complete |
 | 5     | Print estimates, invoices, receipts| ✅ Complete |
 | 6     | Dashboard (gross profit, due, etc) | ✅ Complete |
+| 7     | UI cleanup + delete invoice        | ✅ Complete |
+| 8     | Wave data import                   | ✅ Complete |
 
 ### Phase 2 Design Note
 Invoices have their own tables (`invoices`, `invoice_line_items`) with an
@@ -158,28 +160,57 @@ The jobs table is stubbed with FK relationships only. Column additions
 job-costing sprint. FKs are established now because retrofitting
 relationships later requires migrations; adding columns does not.
 
+### Phase 7 Design Note
+UI cleanup and delete invoice. Invoices list now filters paid invoices by
+default (same toggle pattern as estimates). Draft invoices remain visible —
+they still require action. Delete invoice added as a destructive action;
+ON DELETE CASCADE handles cleanup of line items and payments automatically.
+
+### Phase 8 Design Note
+One-time Wave data migration. Two standalone scripts, run once each against
+a fresh database in order:
+
+`import_wave.py` — imports customers, invoices, and payments from the
+Wave ODS export (Wave_customers_and_invoices.ods). Handles duplicate customer
+records, non-numeric invoice numbers (skipped), status mapping
+(overpaid → paid), and payment method mapping (bank_transfer → e-transfer).
+
+`import_wave_expenses.py` — imports vendors and expenses from Wave CSV
+exports (vendors.csv, bill_items.csv). gst_paid is left null — Wave's
+bill_items export contains tax label names but not dollar amounts.
+
+** These files and the data files have been archived in a local folder, not for public repo **
+
+Invoice numbering updated: auto-increment now uses MAX(invoice_number) + 1
+instead of COUNT(*) + 1, so new invoices continue the sequence from the
+highest imported number rather than restarting from 1. Invoice numbers are
+no longer zero-padded to 3 digits — imported numbers go into the thousands.
+
+Historical data note: Wave data covers activity prior to 2027. The app will
+be used as the live system of record from 2027 onward. Historical records
+are imported for dashboard completeness and reference, not active billing.
+
 ---
 
-## V0 Cleanup Backlog
-Items deferred from active sprints. To be addressed in a dedicated cleanup
-sprint. Ranked by ease + importance:
+## Future Versions
+Items deferred to later versions (v1, v2, etc.) to keep v0 mission-focused:
 
-6. **Import Wave data** — One-time migration script from Wave CSVs. Defer
-   to its own sprint immediately before go-live.
+- **Taxes** — A `tax_rates` table (name, rate, applies_to, jurisdiction)
+  referenced by invoices and expenses. Self-contained sprint, no existing
+  tables touched.
+- **Accounts Payable** — A `bills` + `bill_payments` table pair, same
+  pattern as invoices/payments but on the expense side. Current expenses
+  table is cash-only by design.
+- **Expense line items** — Migration from flat `amount` to an
+  `expense_line_items` child table. Mechanical when the time comes.
+- **Job costing** — Built off the stub `jobs` table already in the schema.
+- **Email / sharing** — A minimal public-facing micro-server (separate Flask
+  app on Railway or Fly.io) that serves read-only estimate/invoice HTML.
+  Local app pushes rendered HTML to it via API call.
+- **Encrypted cloud backup** — One-push backup of ebaccounting.db to
+  encrypted cloud storage.
 
 ---
-
-## Future versions 
-Items deferred to later version (v1,v2,etc) to keep v0 mission-focused
-
-- Taxes: When the time comes, the clean solution is a tax_rates table — name, rate, applies_to (sales/purchases/both), jurisdiction, whatever. Then expenses and invoices reference it by ID. That's a self-contained sprint that doesn't touch anything already built — just adds the table, updates the UI dropdowns, done.
-- Accounts Payable: To support that properly later you'd want something like a bills table (the obligation) and a bill_payments table (the cash out) — same pattern as invoices/payments but on the expense side. The current expenses table is cash-only by nature.
-- Expense line items: We'll need a migration from 
-- Right before going live: grab Wave CSVs to secure historical data and see if we can port it to our new app without too much yak shaving. Otherwise archive and start with fresh data.
-- email link for estimates, invoices, receipts: A dead-simple "public facing" micro-server — a tiny separate Flask app you deploy once to something like Railway or Fly.io that just serves read-only estimate/invoice HTML. Your local app pushes the rendered HTML to it via an API call.
-- See v0005 chat in Claude for context on these decisions.
-- Job costing: built off the stub jobs table we created in our schema
-- create one-push encrypted cloud storage as data backup
 
 ## Key Design Decisions (and Why)
 
@@ -212,28 +243,37 @@ significant complexity with no benefit at this stage.
 
 ## Changelog
 
-### v007 — 2026-06-04
+### v008 — 2026-06-05
 
-Cleanup sprint — items 1–5 from v0 backlog
+Wave data import complete.
 
-- Header/nav alignment fixed across all four pages (dashboard, expenses were
-  inconsistent with estimates and invoices)
-- CSS dialect on expenses.html aligned to app standard (--amber → --accent,
-  --amber-dim → --accent-dim, text/muted colour values unified)
-- Estimates list now hides declined estimates by default; "Show All" / "Hide
-  Closed" toggle to reveal. Accepted estimates remain visible (still need
-  attention — deposit pending, job not started, etc.)
-- Save estimate and save invoice now PATCH existing records instead of POSTing
-  new ones — estimate/invoice numbers no longer change on update
-- Edit Customer — inline edit form on both estimates and invoices pages;
-  appears when a customer is selected, pre-filled with current data, saves
-  via PUT /api/customers/<id>
+- `import_wave.py` added — imports customers, invoices, line items, payments
+  from Wave ODS export (3 sheets). Handles duplicate customers, skips
+  non-numeric invoice numbers, maps statuses and payment methods.
+- `import_wave_expenses.py` added — imports vendors and expenses from Wave
+  CSV exports. gst_paid left null (Wave exports tax labels only, not amounts).
+- Invoice auto-numbering changed in `app.py`: COUNT(*)+1 replaced with
+  MAX(invoice_number)+1 in both `create_invoice` and `invoice_from_estimate`
+  routes. New invoices continue from highest existing number (INV-1142+).
+- `requirements.txt` updated: pandas and odfpy added (required by import scripts).
+- Project structure updated in DOCS.md to include import scripts.
 
-Flask routes added:
-  GET  /api/customers/<id> — returns full customer record for edit form
-  PUT  /api/customers/<id> — updates customer name, email, phone, address
-  PATCH /api/estimates/<id> — updates estimate header + replaces line items
-  PATCH /api/invoices/<id>  — updates invoice header + replaces line items
+Import results: 89 customers, 117 invoices, 224 line items, 165 payments,
+26 vendors, 157 expenses.
+
+### v007 — 2026-06-05
+
+UI cleanup + delete invoice.
+
+- Invoices list now JS-rendered (same pattern as estimates list). Paid invoices
+  hidden by default; Show All / Hide Closed toggle added.
+- Draft invoices remain visible by default — they still require action.
+- `invoices_page` route updated: passes `[dict(i) for i in invoices]` so
+  Jinja's `tojson` filter can serialize the data for the JS list renderer.
+- Delete invoice added: `DELETE /api/invoices/<id>` route in `app.py`.
+  ON DELETE CASCADE cleans up line items and payments automatically.
+- Delete button added to invoice form (visible when invoice loaded, hidden
+  on clear). Confirm dialog guards against accidental deletion.
 
 ### v006 — 2026-06-04
 
@@ -312,8 +352,8 @@ All print views hide screen controls on print via @media print
 - Phase 3 complete
 - SQLite table added: payments
 - Flask routes added: POST /api/invoices/<id>/payments,
-GET /api/invoices/<id>/payments, DELETE /api/payments/<id>
-invoices.html — payments card added below invoice form
+  GET /api/invoices/<id>/payments, DELETE /api/payments/<id>
+- invoices.html — payments card added below invoice form
 - Payments section hidden until an existing invoice is loaded
 - Log Payment form: amount, date, method (e-transfer/cheque/cash/credit card/bitcoin), notes
 - Payment history table with per-row delete
@@ -321,6 +361,7 @@ invoices.html — payments card added below invoice form
 - Payment date defaults to today
 
 ### v002 — 2026-05-25
+
 - Phase 2 complete
 - SQLite tables added: `invoices`, `invoice_line_items`
 - Flask routes added: `POST /api/invoices`, `GET /api/invoices/<id>`,
@@ -335,6 +376,7 @@ invoices.html — payments card added below invoice form
 - Issued date defaults to today, due date defaults to +30 days
 
 ### v001 — 2026-05-21
+
 - Initial release
 - SQLite database with `customers`, `estimates`, `estimate_line_items` tables
 - Flask backend with routes: GET `/`, GET+POST `/api/customers`,
@@ -365,13 +407,12 @@ Replacing Wave accounting. Single user, runs on Ubuntu at localhost:5000.
 - When something works, confirm it before moving on.
 - Be direct. Don't pad. Humour is welcome.
 
-**Current state:** v003 complete. Phase 3 done and tested. All six database
-tables exist and are working. Flask app runs. Estimates, invoices, and payments
-are fully functional — invoices can be created, saved, reloaded, converted from
-estimates, and paid in full or in partial payments.
+**Current state:** v008 complete. Wave historical data fully imported —
+89 customers, 117 invoices, 165 payments, 26 vendors, 157 expenses.
+App is live and running on real data. New invoices will continue from
+INV-1142 onward. The app is the system of record from 2027 forward.
 
-**Next up:** Phase 4 — Expenses / COGS. Or tackle the cleanup backlog item
-(filter accepted estimates from the estimates list) first — owner's call.
+**Next up:** v1 feature sprints
 
 **What NOT to do:**
 - Don't refactor working code without being asked.
