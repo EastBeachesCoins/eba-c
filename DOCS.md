@@ -179,7 +179,8 @@ records, non-numeric invoice numbers (skipped), status mapping
 exports (vendors.csv, bill_items.csv). gst_paid is left null — Wave's
 bill_items export contains tax label names but not dollar amounts.
 
-** These files and the data files have been archived in a local folder, not for public repo **
+** These files and the data files have been archived in a local folder, not 
+for public repo **
 
 Invoice numbering updated: auto-increment now uses MAX(invoice_number) + 1
 instead of COUNT(*) + 1, so new invoices continue the sequence from the
@@ -209,6 +210,8 @@ Items deferred to later versions (v1, v2, etc.) to keep v0 mission-focused:
   Local app pushes rendered HTML to it via API call.
 - **Encrypted cloud backup** — One-push backup of ebaccounting.db to
   encrypted cloud storage.
+- ** Total value of outstanding invoices ** would be cool to have a sum of 
+  the value of outstanding invoices on the dashboard
 
 ---
 
@@ -242,6 +245,20 @@ significant complexity with no benefit at this stage.
 ---
 
 ## Changelog
+
+### v009 — 2026-06-07
+
+Testing and bug fixes.
+
+- Invoice auto-numbering fixed: `ORDER BY id DESC LIMIT 1` replaced with
+  `MAX(CAST(REPLACE(invoice_number, 'INV-', '') AS INTEGER))` in both
+  `create_invoice` and `invoice_from_estimate` routes. Previously could
+  generate duplicate numbers if invoices were imported out of sequence.
+- Expense logging fixed: `data.get('description', '').strip()` replaced with
+  `(data.get('description') or '').strip()` in `create_expense`. The default
+  value didn't catch explicit null, causing a 500 when description was omitted.
+- Logo compressed: logo.png reduced from 850kb to 136kb using pngquant
+  with no visible quality loss. PDF export size reduced accordingly.
 
 ### v008 — 2026-06-05
 

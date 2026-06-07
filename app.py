@@ -430,13 +430,9 @@ def create_invoice():
 
     try:
         max_row = conn.execute(
-            "SELECT invoice_number FROM invoices ORDER BY id DESC LIMIT 1"
+            "SELECT MAX(CAST(REPLACE(invoice_number, 'INV-', '') AS INTEGER)) FROM invoices"
         ).fetchone()
-        if max_row:
-            last_num = int(max_row[0].replace("INV-", ""))
-            invoice_number = f"INV-{last_num + 1}"
-        else:
-            invoice_number = "INV-001"
+        invoice_number = f"INV-{(max_row[0] or 0) + 1}"
 
         cursor = conn.execute("""
             INSERT INTO invoices
@@ -615,13 +611,9 @@ def invoice_from_estimate(estimate_id):
             return jsonify({"error": "Estimate not found"}), 404
 
         max_row = conn.execute(
-            "SELECT invoice_number FROM invoices ORDER BY id DESC LIMIT 1"
+            "SELECT MAX(CAST(REPLACE(invoice_number, 'INV-', '') AS INTEGER)) FROM invoices"
         ).fetchone()
-        if max_row:
-            last_num = int(max_row[0].replace("INV-", ""))
-            invoice_number = f"INV-{last_num + 1}"
-        else:
-            invoice_number = "INV-001"
+        invoice_number = f"INV-{(max_row[0] or 0) + 1}"
 
         # Create the invoice, copying fields from the estimate
         cursor = conn.execute("""
@@ -841,7 +833,7 @@ def create_expense():
             data.get('invoice_id') or None,
             data.get('estimate_id') or None,
             data.get('category', 'cogs'),
-            data.get('description', '').strip() or None,
+            (data.get('description') or '').strip() or None,
             amount,
             data.get('gst_paid') or None,
             expense_date
